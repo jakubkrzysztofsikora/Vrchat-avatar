@@ -192,9 +192,13 @@ def validate_scene():
         return True
 
 def get_rig_target(rig):
-    """Return a point for the camera to look at."""
+    """Return a point for the camera to look at (chest/head area, not feet)."""
     if rig:
-        return rig.matrix_world.translation
+        # Target the chest/head area, not the armature origin (which is at feet)
+        # Avatar is ~2.1m tall, so chest is around 1.4-1.6m
+        rig_origin = rig.matrix_world.translation
+        chest_height = Vector((rig_origin.x, rig_origin.y, rig_origin.z + 1.5))
+        return chest_height
     return Vector((0.0, 0.0, 1.5))
 
 
@@ -212,30 +216,41 @@ def position_camera_for_view(camera, view_type, rig):
     print(f"Positioning camera for {view_type}...")
 
     target_point = get_rig_target(rig)
+    print(f"  Camera target: {target_point}")
 
+    # Full body shots - camera positioned to show entire avatar
     if view_type == 'front':
-        camera.location = (0, -4, 1.5)
-        camera.data.lens = 50
+        camera.location = (0, -5.5, 1.2)  # Further back to capture full body
+        camera.data.lens = 35  # Wider lens
+        print(f"  Front view: camera at {camera.location}, lens {camera.data.lens}mm")
 
     elif view_type == 'back':
-        camera.location = (0, 4, 1.5)
-        camera.data.lens = 50
+        camera.location = (0, 5.5, 1.2)
+        camera.data.lens = 35
+        print(f"  Back view: camera at {camera.location}, lens {camera.data.lens}mm")
 
     elif view_type == 'face':
-        camera.location = (0.3, -1.2, 1.85)  # Offset to right side (mechanical side)
-        camera.data.lens = 85  # Closer lens for portrait
+        # Close-up of face/mechanical eye
+        face_target = Vector((target_point.x, target_point.y, target_point.z + 0.3))  # Aim at head
+        camera.location = (0.3, -1.2, 1.95)  # Offset to right side (mechanical side)
+        camera.data.lens = 85  # Portrait lens
+        point_camera_at(camera, face_target)
+        print(f"  Face closeup: camera at {camera.location}, targeting {face_target}")
+        return  # Skip the main point_camera_at call below
 
     elif view_type == 'pose1':
-        # Mechanical unfold - side view
-        camera.location = (3, -1, 1.5)
-        camera.data.lens = 50
+        # Mechanical unfold - 3/4 side view to show both front and side
+        camera.location = (3.5, -2.5, 1.2)
+        camera.data.lens = 40
+        print(f"  Pose 1 (mech unfold): camera at {camera.location}, lens {camera.data.lens}mm")
 
     elif view_type == 'pose2':
         # The stare - front 3/4 view
-        camera.location = (1.5, -3, 1.7)
-        camera.data.lens = 50
+        camera.location = (1.8, -4.0, 1.4)
+        camera.data.lens = 45
+        print(f"  Pose 2 (the stare): camera at {camera.location}, lens {camera.data.lens}mm")
 
-    point_camera_at(camera, Vector(target_point))
+    point_camera_at(camera, target_point)
 
 def apply_pose(rig, pose_name):
     """Apply animation pose for screenshot"""
