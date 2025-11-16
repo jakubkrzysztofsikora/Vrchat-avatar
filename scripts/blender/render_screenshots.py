@@ -24,7 +24,9 @@ def setup_render_settings():
     scene = bpy.context.scene
     scene.render.engine = 'CYCLES'
     scene.cycles.device = 'CPU'
-    scene.cycles.samples = 256  # High quality
+    samples = int(os.environ.get("RENDER_SAMPLES", "256"))
+    scene.cycles.samples = samples  # High quality
+    scene.cycles.use_denoising = False
     scene.render.resolution_x = RESOLUTION_X
     scene.render.resolution_y = RESOLUTION_Y
     scene.render.resolution_percentage = 100
@@ -33,6 +35,7 @@ def setup_render_settings():
     # Color management
     scene.view_settings.view_transform = 'Filmic'
     scene.view_settings.look = 'Medium High Contrast'
+    scene.view_settings.exposure = 1.0
 
 def setup_lighting():
     """Create dramatic horror lighting"""
@@ -48,28 +51,28 @@ def setup_lighting():
     # Key light (cold blue - left side)
     bpy.ops.object.light_add(type='AREA', location=(3, -2, 2))
     key_light = bpy.context.active_object
-    key_light.data.energy = 100
+    key_light.data.energy = 220
     key_light.data.color = (0.7, 0.8, 1.0)  # Cold blue
     key_light.data.size = 2
 
     # Rim light (warm amber - right side, from behind)
     bpy.ops.object.light_add(type='AREA', location=(-2, 3, 2.5))
     rim_light = bpy.context.active_object
-    rim_light.data.energy = 80
+    rim_light.data.energy = 160
     rim_light.data.color = (1.0, 0.6, 0.2)  # Amber (Dwemer glow)
     rim_light.data.size = 1.5
 
     # Fill light (very dim, from front)
     bpy.ops.object.light_add(type='AREA', location=(0, -4, 1.5))
     fill_light = bpy.context.active_object
-    fill_light.data.energy = 20
+    fill_light.data.energy = 60
     fill_light.data.color = (0.9, 0.9, 0.9)
     fill_light.data.size = 3
 
     # Top light (dim, for form definition)
     bpy.ops.object.light_add(type='POINT', location=(0, 0, 4))
     top_light = bpy.context.active_object
-    top_light.data.energy = 50
+    top_light.data.energy = 100
     top_light.data.color = (0.8, 0.8, 1.0)
 
 def setup_camera():
@@ -112,8 +115,8 @@ def setup_environment():
 
     # Background shader
     bg = nodes.new(type='ShaderNodeBackground')
-    bg.inputs['Color'].default_value = (0.02, 0.02, 0.03, 1.0)  # Very dark blue
-    bg.inputs['Strength'].default_value = 0.5
+    bg.inputs['Color'].default_value = (0.05, 0.05, 0.07, 1.0)  # Slightly brighter blue
+    bg.inputs['Strength'].default_value = 1.0
 
     output = nodes.new(type='ShaderNodeOutputWorld')
     world.node_tree.links.new(bg.outputs['Background'], output.inputs['Surface'])
@@ -211,7 +214,7 @@ def point_camera_at(camera, target_point):
     camera.rotation_euler = rotation
 
 
-def position_camera_for_view(camera, view_type, rig):
+def position_camera_for_view(camera, view_type, rig, bounds_center, bounds_size):
     """Position camera for specific view"""
     print(f"Positioning camera for {view_type}...")
 
@@ -273,7 +276,7 @@ def apply_pose(rig, pose_name):
     elif pose_name == "TheStare":
         bpy.context.scene.frame_set(60)
 
-def render_view(camera, view_type, rig=None, pose=None):
+def render_view(camera, view_type, rig=None, pose=None, bounds_center=None, bounds_size=None):
     """Render a specific view"""
     print(f"Rendering {view_type}...")
 
@@ -282,7 +285,7 @@ def render_view(camera, view_type, rig=None, pose=None):
         apply_pose(rig, pose)
 
     # Position camera
-    position_camera_for_view(camera, view_type, rig)
+    position_camera_for_view(camera, view_type, rig, bounds_center, bounds_size)
 
     # Render
     output_path = os.path.join(OUTPUT_DIR, f"{view_type}.png")
@@ -325,12 +328,15 @@ def main():
         print("ERROR: No rig found - cannot position camera!")
         print("Attempting to render anyway with default camera position...")
 
+    bounds_center, bounds_size = get_avatar_bounds()
+    print(f"Avatar bounds center: {bounds_center}, size: {bounds_size}")
+
     # Render views
-    render_view(camera, 'front', rig)
-    render_view(camera, 'back', rig)
-    render_view(camera, 'face', rig)
-    render_view(camera, 'pose1', rig, pose='MechanicalUnfold')
-    render_view(camera, 'pose2', rig, pose='TheStare')
+    render_view(camera, 'front', rig, bounds_center=bounds_center, bounds_size=bounds_size)
+    render_view(camera, 'back', rig, bounds_center=bounds_center, bounds_size=bounds_size)
+    render_view(camera, 'face', rig, bounds_center=bounds_center, bounds_size=bounds_size)
+    render_view(camera, 'pose1', rig, pose='MechanicalUnfold', bounds_center=bounds_center, bounds_size=bounds_size)
+    render_view(camera, 'pose2', rig, pose='TheStare', bounds_center=bounds_center, bounds_size=bounds_size)
 
     print("=" * 60)
     print("Screenshot rendering complete!")
