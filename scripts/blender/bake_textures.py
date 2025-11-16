@@ -47,16 +47,20 @@ def bake_material_channel(obj, bake_type, image_name):
     # Create image
     img = create_bake_image(f"{obj.name}_{image_name}")
 
-    # Setup material for baking
-    if obj.data.materials:
-        mat = obj.data.materials[0]
-        mat.use_nodes = True
-        nodes = mat.node_tree.nodes
+    # Ensure object has a material
+    if not obj.data.materials:
+        # Create temporary material for baking
+        temp_mat = bpy.data.materials.new(name=f"{obj.name}_BakeMat")
+        obj.data.materials.append(temp_mat)
 
-        # Add image texture node for baking target
-        img_node = nodes.new(type='ShaderNodeTexImage')
-        img_node.image = img
-        nodes.active = img_node
+    mat = obj.data.materials[0]
+    mat.use_nodes = True
+    nodes = mat.node_tree.nodes
+
+    # Add image texture node for baking target
+    img_node = nodes.new(type='ShaderNodeTexImage')
+    img_node.image = img
+    nodes.active = img_node  # CRITICAL: Set as active for baking
 
     # Select object
     bpy.ops.object.select_all(action='DESELECT')
@@ -73,11 +77,18 @@ def bake_material_channel(obj, bake_type, image_name):
         bpy.context.scene.render.bake.use_pass_indirect = False
         bpy.context.scene.render.bake.use_pass_color = True
 
-    bpy.ops.object.bake(type=bake_type)
+    try:
+        bpy.ops.object.bake(type=bake_type)
+        # Save image
+        img.save()
+        print(f"✓ Saved: {img.filepath_raw}")
+    except RuntimeError as e:
+        print(f"⚠ Baking failed for {obj.name}: {e}")
+        print(f"  Skipping {bake_type} channel")
+        return None
 
-    # Save image
-    img.save()
-    print(f"Saved: {img.filepath_raw}")
+    # Clean up: Remove the temporary image node
+    nodes.remove(img_node)
 
     return img
 
