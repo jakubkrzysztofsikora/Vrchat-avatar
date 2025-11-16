@@ -123,51 +123,86 @@ def setup_environment():
 
 def find_avatar_rig():
     """Find the avatar armature"""
+    print("Searching for avatar rig...")
     for obj in bpy.data.objects:
         if obj.type == 'ARMATURE' and 'Forgotten' in obj.name:
+            print(f"  Found rig: {obj.name}")
             return obj
     # Fallback: return first armature
     for obj in bpy.data.objects:
         if obj.type == 'ARMATURE':
+            print(f"  Found armature (fallback): {obj.name}")
             return obj
+    print("  ERROR: No armature found in scene!")
     return None
 
-def get_avatar_bounds():
-    """Return the world-space bounding box center and size of all visible mesh objects."""
-    meshes = [
-        obj for obj in bpy.data.objects
-        if obj.type == 'MESH' and not obj.hide_render and obj.visible_get()
-    ]
+def validate_scene():
+    """Validate scene has required objects and geometry"""
+    print("Validating scene before rendering...")
 
-    if not meshes:
-        return Vector((0.0, 0.0, 1.5)), Vector((1.0, 1.0, 2.0))
+    issues = []
 
-    world_corners = []
-    for obj in meshes:
-        for corner in obj.bound_box:
-            world_corners.append(obj.matrix_world @ Vector(corner))
+    # Check for armature
+    rig = find_avatar_rig()
+    if not rig:
+        issues.append("No armature found")
 
-    min_corner = Vector((
-        min(c.x for c in world_corners),
-        min(c.y for c in world_corners),
-        min(c.z for c in world_corners),
-    ))
-    max_corner = Vector((
-        max(c.x for c in world_corners),
-        max(c.y for c in world_corners),
-        max(c.z for c in world_corners),
-    ))
+    # Check for mesh objects
+    mesh_objects = [obj for obj in bpy.data.objects if obj.type == 'MESH' and not obj.name.startswith('WGT-')]
+    if len(mesh_objects) == 0:
+        issues.append("No mesh objects found")
+    else:
+        print(f"  Found {len(mesh_objects)} mesh objects:")
+        total_verts = 0
+        for obj in mesh_objects:
+            vert_count = len(obj.data.vertices)
+            total_verts += vert_count
+            print(f"    - {obj.name}: {vert_count} vertices")
 
-    center = (min_corner + max_corner) * 0.5
-    size = max_corner - min_corner
-    return center, size
+        if total_verts < 100:
+            issues.append(f"Very low vertex count: {total_verts} (expected >100)")
 
+    # Check scene bounds (should be humanoid-sized)
+    if mesh_objects:
+        # Calculate combined bounding box
+        all_coords = []
+        for obj in mesh_objects:
+            for v in obj.data.vertices:
+                all_coords.append(obj.matrix_world @ v.co)
 
-def get_rig_target(rig, fallback_center):
-    """Return a point for the camera to look at."""
+        if all_coords:
+            min_z = min(v.z for v in all_coords)
+            max_z = max(v.z for v in all_coords)
+            height = max_z - min_z
+
+            print(f"  Scene height: {height:.2f}m (min_z: {min_z:.2f}, max_z: {max_z:.2f})")
+
+            if height < 1.0:
+                issues.append(f"Scene height too small: {height:.2f}m (expected ~2m)")
+
+            # Check if geometry is near origin (not floating far away)
+            if min_z > 5.0 or min_z < -5.0:
+                issues.append(f"Geometry is far from origin (min_z: {min_z:.2f}m)")
+
+    if issues:
+        print("  ⚠ VALIDATION WARNINGS:")
+        for issue in issues:
+            print(f"    - {issue}")
+        print("  Rendering will continue but results may be incorrect")
+        return False
+    else:
+        print("  ✓ Scene validation passed")
+        return True
+
+def get_rig_target(rig):
+    """Return a point for the camera to look at (chest/head area, not feet)."""
     if rig:
-        return rig.matrix_world.translation
-    return fallback_center
+        # Target the chest/head area, not the armature origin (which is at feet)
+        # Avatar is ~2.1m tall, so chest is around 1.4-1.6m
+        rig_origin = rig.matrix_world.translation
+        chest_height = Vector((rig_origin.x, rig_origin.y, rig_origin.z + 1.5))
+        return chest_height
+    return Vector((0.0, 0.0, 1.5))
 
 
 def point_camera_at(camera, target_point):
@@ -183,54 +218,42 @@ def position_camera_for_view(camera, view_type, rig, bounds_center, bounds_size)
     """Position camera for specific view"""
     print(f"Positioning camera for {view_type}...")
 
-    target_point = get_rig_target(rig, bounds_center)
-    horizontal_span = max(bounds_size.x, bounds_size.y)
-    depth_distance = max(horizontal_span * 1.2, bounds_size.z * 0.8, 2.5)
-    height_offset = bounds_size.z * 0.05
+    target_point = get_rig_target(rig)
+    print(f"  Camera target: {target_point}")
 
+    # Full body shots - camera positioned to show entire avatar
     if view_type == 'front':
-        camera.location = (
-            bounds_center.x,
-            bounds_center.y - depth_distance,
-            bounds_center.z + height_offset,
-        )
-        camera.data.lens = 50
+        camera.location = (0, -5.5, 1.2)  # Further back to capture full body
+        camera.data.lens = 35  # Wider lens
+        print(f"  Front view: camera at {camera.location}, lens {camera.data.lens}mm")
 
     elif view_type == 'back':
-        camera.location = (
-            bounds_center.x,
-            bounds_center.y + depth_distance,
-            bounds_center.z + height_offset,
-        )
-        camera.data.lens = 50
+        camera.location = (0, 5.5, 1.2)
+        camera.data.lens = 35
+        print(f"  Back view: camera at {camera.location}, lens {camera.data.lens}mm")
 
     elif view_type == 'face':
-        camera.location = (
-            bounds_center.x + horizontal_span * 0.15,
-            bounds_center.y - depth_distance * 0.35,
-            bounds_center.z + bounds_size.z * 0.35,
-        )
-        camera.data.lens = 85  # Closer lens for portrait
+        # Close-up of face/mechanical eye
+        face_target = Vector((target_point.x, target_point.y, target_point.z + 0.3))  # Aim at head
+        camera.location = (0.3, -1.2, 1.95)  # Offset to right side (mechanical side)
+        camera.data.lens = 85  # Portrait lens
+        point_camera_at(camera, face_target)
+        print(f"  Face closeup: camera at {camera.location}, targeting {face_target}")
+        return  # Skip the main point_camera_at call below
 
     elif view_type == 'pose1':
-        # Mechanical unfold - side view
-        camera.location = (
-            bounds_center.x + depth_distance * 0.6,
-            bounds_center.y - depth_distance * 0.2,
-            bounds_center.z + bounds_size.z * 0.1,
-        )
-        camera.data.lens = 45
+        # Mechanical unfold - 3/4 side view to show both front and side
+        camera.location = (3.5, -2.5, 1.2)
+        camera.data.lens = 40
+        print(f"  Pose 1 (mech unfold): camera at {camera.location}, lens {camera.data.lens}mm")
 
     elif view_type == 'pose2':
         # The stare - front 3/4 view
-        camera.location = (
-            bounds_center.x + depth_distance * 0.35,
-            bounds_center.y - depth_distance * 0.9,
-            bounds_center.z + bounds_size.z * 0.2,
-        )
-        camera.data.lens = 50
+        camera.location = (1.8, -4.0, 1.4)
+        camera.data.lens = 45
+        print(f"  Pose 2 (the stare): camera at {camera.location}, lens {camera.data.lens}mm")
 
-    point_camera_at(camera, Vector(target_point))
+    point_camera_at(camera, target_point)
 
 def apply_pose(rig, pose_name):
     """Apply animation pose for screenshot"""
@@ -288,6 +311,11 @@ def main():
         print(f"ERROR: {blend_file} not found!")
         return
 
+    # Validate scene first
+    validation_passed = validate_scene()
+    if not validation_passed:
+        print("⚠ Scene validation failed - screenshots may not render correctly!")
+
     # Setup scene
     setup_render_settings()
     setup_environment()
@@ -296,10 +324,9 @@ def main():
 
     # Find rig
     rig = find_avatar_rig()
-    if rig:
-        print(f"Found rig: {rig.name}")
-    else:
-        print("Warning: No rig found")
+    if not rig:
+        print("ERROR: No rig found - cannot position camera!")
+        print("Attempting to render anyway with default camera position...")
 
     bounds_center, bounds_size = get_avatar_bounds()
     print(f"Avatar bounds center: {bounds_center}, size: {bounds_size}")

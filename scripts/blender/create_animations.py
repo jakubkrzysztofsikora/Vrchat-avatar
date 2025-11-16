@@ -249,39 +249,102 @@ def export_animation(action, name):
 
 def main():
     """Main animation creation pipeline"""
+    import sys
+
     print("=" * 60)
     print("ANIMATION CREATION PIPELINE")
     print("=" * 60)
+    print(f"Blender version: {bpy.app.version_string}")
+    print(f"Python version: {sys.version}")
+    print(f"Animation output directory: {ANIM_OUTPUT_DIR}")
+    print("=" * 60 + "\n")
 
-    # Load the rigged avatar
-    blend_file = os.path.abspath("Avatar/ForgottenArchitect.blend")
-    if os.path.exists(blend_file):
+    try:
+        # Load the rigged avatar
+        blend_file = os.path.abspath("Avatar/ForgottenArchitect.blend")
+        print(f"Loading avatar file: {blend_file}")
+
+        if not os.path.exists(blend_file):
+            print(f"✗ ERROR: {blend_file} not found!")
+            print("Make sure generate_avatar.py has been run first.")
+            return
+
+        file_size = os.path.getsize(blend_file)
+        print(f"File size: {file_size / 1024:.1f} KB")
+
         bpy.ops.wm.open_mainfile(filepath=blend_file)
-    else:
-        print(f"ERROR: {blend_file} not found!")
+        print("✓ Avatar file loaded\n")
 
-    # Find the rig
-    rig = None
-    for obj in bpy.data.objects:
-        if obj.type == 'ARMATURE':
-            rig = obj
-            break
+        # Find the rig
+        print("Searching for armature...")
+        rig = None
+        armatures = [obj for obj in bpy.data.objects if obj.type == 'ARMATURE']
 
-    if not rig:
-        print("ERROR: No armature found!")
-        return
+        if len(armatures) == 0:
+            print("✗ ERROR: No armature found!")
+            print("Cannot create animations without a rig.")
+            return
+        elif len(armatures) > 1:
+            print(f"⚠ WARNING: Found {len(armatures)} armatures, using first one")
+            for arm in armatures:
+                print(f"  - {arm.name}")
 
-    print(f"Found rig: {rig.name}")
+        rig = armatures[0]
+        print(f"✓ Using rig: {rig.name}")
+        print(f"  Bones: {len(rig.data.bones)}")
+        print(f"  Sample bones: {[b.name for b in list(rig.data.bones)[:5]]}\n")
 
-    # Create animations
-    create_idle_animation(rig)
-    create_mechanical_unfold_animation(rig)
-    create_system_reboot_animation(rig)
-    create_the_stare_animation(rig)
+        # Create animations
+        print("STEP 1: Creating idle animation...")
+        create_idle_animation(rig)
+        print("  ✓ Idle animation created\n")
 
-    # Save
-    bpy.ops.wm.save_as_mainfile(filepath=blend_file)
-    print("Animation creation complete!")
+        print("STEP 2: Creating mechanical unfold animation...")
+        create_mechanical_unfold_animation(rig)
+        print("  ✓ Mechanical unfold animation created\n")
+
+        print("STEP 3: Creating system reboot animation...")
+        create_system_reboot_animation(rig)
+        print("  ✓ System reboot animation created\n")
+
+        print("STEP 4: Creating 'The Stare' animation...")
+        create_the_stare_animation(rig)
+        print("  ✓ 'The Stare' animation created\n")
+
+        # List created actions
+        actions = [action for action in bpy.data.actions]
+        print(f"Created {len(actions)} actions:")
+        for action in actions:
+            frame_range = action.frame_range
+            print(f"  - {action.name} (frames {frame_range[0]:.0f}-{frame_range[1]:.0f})")
+
+        # Save
+        print("\nSaving blend file with animations...")
+        bpy.ops.wm.save_as_mainfile(filepath=blend_file)
+        print("✓ File saved successfully!")
+
+        # Verify animation files
+        if os.path.exists(ANIM_OUTPUT_DIR):
+            anim_files = [f for f in os.listdir(ANIM_OUTPUT_DIR) if f.endswith('.fbx')]
+            print(f"\nExported {len(anim_files)} animation FBX files:")
+            for anim_file in anim_files:
+                anim_path = os.path.join(ANIM_OUTPUT_DIR, anim_file)
+                anim_size = os.path.getsize(anim_path) / 1024
+                print(f"  - {anim_file} ({anim_size:.1f} KB)")
+
+        print("\n" + "=" * 60)
+        print("✓ ANIMATION CREATION COMPLETE!")
+        print("=" * 60)
+
+    except Exception as e:
+        print("\n" + "=" * 60)
+        print("✗ FATAL ERROR DURING ANIMATION CREATION")
+        print("=" * 60)
+        print(f"Error: {e}")
+        import traceback
+        traceback.print_exc()
+        print("=" * 60)
+        raise
 
 if __name__ == "__main__":
     main()
