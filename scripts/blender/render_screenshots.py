@@ -11,7 +11,7 @@ Renders 5 high-quality views:
 
 import bpy
 import os
-import math
+from mathutils import Vector
 
 OUTPUT_DIR = os.path.abspath("docs/screenshots")
 RESOLUTION_X = 1920
@@ -129,32 +129,51 @@ def find_avatar_rig():
             return obj
     return None
 
+def get_rig_target(rig):
+    """Return a point for the camera to look at."""
+    if rig:
+        return rig.matrix_world.translation
+    return Vector((0.0, 0.0, 1.5))
+
+
+def point_camera_at(camera, target_point):
+    """Rotate the camera so it looks at the provided target point."""
+    direction = target_point - camera.location
+    if direction.length < 1e-6:
+        return
+    rotation = direction.to_track_quat('-Z', 'Y').to_euler()
+    camera.rotation_euler = rotation
+
+
 def position_camera_for_view(camera, view_type, rig):
     """Position camera for specific view"""
     print(f"Positioning camera for {view_type}...")
 
+    target_point = get_rig_target(rig)
+
     if view_type == 'front':
         camera.location = (0, -4, 1.5)
-        camera.rotation_euler = (math.radians(90), 0, 0)
+        camera.data.lens = 50
 
     elif view_type == 'back':
         camera.location = (0, 4, 1.5)
-        camera.rotation_euler = (math.radians(90), 0, math.radians(180))
+        camera.data.lens = 50
 
     elif view_type == 'face':
         camera.location = (0.3, -1.2, 1.85)  # Offset to right side (mechanical side)
-        camera.rotation_euler = (math.radians(90), 0, math.radians(10))
         camera.data.lens = 85  # Closer lens for portrait
 
     elif view_type == 'pose1':
         # Mechanical unfold - side view
         camera.location = (3, -1, 1.5)
-        camera.rotation_euler = (math.radians(90), 0, math.radians(60))
+        camera.data.lens = 50
 
     elif view_type == 'pose2':
         # The stare - front 3/4 view
         camera.location = (1.5, -3, 1.7)
-        camera.rotation_euler = (math.radians(95), 0, math.radians(20))
+        camera.data.lens = 50
+
+    point_camera_at(camera, Vector(target_point))
 
 def apply_pose(rig, pose_name):
     """Apply animation pose for screenshot"""
