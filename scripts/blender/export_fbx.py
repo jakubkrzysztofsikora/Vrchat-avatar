@@ -93,23 +93,85 @@ def export_to_fbx():
 
 def main():
     """Main export pipeline"""
+    import sys
+
     print("=" * 60)
     print("FBX EXPORT PIPELINE")
     print("=" * 60)
+    print(f"Blender version: {bpy.app.version_string}")
+    print(f"Python version: {sys.version}")
+    print(f"Output path: {OUTPUT_PATH}")
+    print("=" * 60 + "\n")
 
-    # Load the final avatar
-    blend_file = os.path.abspath("Avatar/ForgottenArchitect.blend")
-    if os.path.exists(blend_file):
+    try:
+        # Load the final avatar
+        blend_file = os.path.abspath("Avatar/ForgottenArchitect.blend")
+        print(f"Loading avatar file: {blend_file}")
+
+        if not os.path.exists(blend_file):
+            print(f"✗ ERROR: {blend_file} not found!")
+            print("Make sure generate_avatar.py and bake_textures.py have been run first.")
+            return
+
+        file_size = os.path.getsize(blend_file)
+        print(f"File size: {file_size / 1024:.1f} KB")
+
         bpy.ops.wm.open_mainfile(filepath=blend_file)
-    else:
-        print(f"ERROR: {blend_file} not found!")
-        return
+        print("✓ Avatar file loaded\n")
 
-    prepare_for_export()
-    export_to_fbx()
+        # Verify scene has required content
+        mesh_count = len([obj for obj in bpy.data.objects if obj.type == 'MESH' and not obj.name.startswith('WGT-')])
+        armature_count = len([obj for obj in bpy.data.objects if obj.type == 'ARMATURE'])
 
-    print(f"Avatar exported to: {OUTPUT_PATH}")
-    print("Ready for Unity import!")
+        print(f"Scene contents:")
+        print(f"  Mesh objects: {mesh_count}")
+        print(f"  Armatures: {armature_count}")
+
+        if mesh_count == 0:
+            print("✗ ERROR: No mesh objects found!")
+            return
+
+        if armature_count == 0:
+            print("⚠ WARNING: No armature found - FBX may not rig properly!")
+
+        print()
+
+        # Prepare for export
+        print("STEP 1: Preparing for export...")
+        prepare_for_export()
+        print("  ✓ Export preparation complete\n")
+
+        # Export to FBX
+        print("STEP 2: Exporting to FBX...")
+        export_to_fbx()
+        print("  ✓ FBX export complete\n")
+
+        # Verify FBX was created
+        if os.path.exists(OUTPUT_PATH):
+            fbx_size = os.path.getsize(OUTPUT_PATH)
+            print(f"✓ FBX file created: {OUTPUT_PATH}")
+            print(f"✓ FBX file size: {fbx_size / 1024:.1f} KB")
+
+            if fbx_size < 10000:
+                print("⚠ WARNING: FBX file is very small - export may have failed!")
+        else:
+            print("✗ ERROR: FBX file was not created!")
+            return
+
+        print("\n" + "=" * 60)
+        print("✓ FBX EXPORT COMPLETE!")
+        print("=" * 60)
+        print("Ready for Unity import!")
+
+    except Exception as e:
+        print("\n" + "=" * 60)
+        print("✗ FATAL ERROR DURING FBX EXPORT")
+        print("=" * 60)
+        print(f"Error: {e}")
+        import traceback
+        traceback.print_exc()
+        print("=" * 60)
+        raise
 
 if __name__ == "__main__":
     main()

@@ -137,38 +137,318 @@ def create_base_body():
     # Fallback: create manual armature
     return create_manual_armature()
 
-def create_body_mesh():
-    """Create the body mesh with asymmetric mechanical corruption"""
-    print("Generating body mesh...")
+def create_torso_mesh(scale):
+    """Create anatomically-positioned torso (chest and abdomen)"""
+    print("  Creating torso...")
 
-    # Create base mesh from cube (will be subdivided and sculpted)
-    bpy.ops.mesh.primitive_cube_add(size=2, location=(0, 0, 1.0))
+    # Upper torso (chest) - tapered cylinder
+    bpy.ops.mesh.primitive_cylinder_add(
+        radius=0.18 * scale,
+        depth=0.4 * scale,
+        location=(0, 0, 1.4 * scale),
+        vertices=16
+    )
+    chest = bpy.context.active_object
+    chest.name = "Torso_Chest"
+
+    # Scale to be wider at top (shoulders)
+    bpy.ops.object.mode_set(mode='EDIT')
+    bm = bmesh.from_edit_mesh(chest.data)
+
+    # Select top vertices and scale outward
+    for v in bm.verts:
+        if v.co.z > 0.15 * scale:
+            v.co.x *= 1.3
+            v.co.y *= 1.2
+
+    bmesh.update_edit_mesh(chest.data)
+    bpy.ops.object.mode_set(mode='OBJECT')
+
+    # Lower torso (abdomen)
+    bpy.ops.mesh.primitive_cylinder_add(
+        radius=0.15 * scale,
+        depth=0.25 * scale,
+        location=(0, 0, 1.125 * scale),
+        vertices=16
+    )
+    abdomen = bpy.context.active_object
+    abdomen.name = "Torso_Abdomen"
+
+    # Join chest and abdomen
+    bpy.ops.object.select_all(action='DESELECT')
+    chest.select_set(True)
+    abdomen.select_set(True)
+    bpy.context.view_layer.objects.active = chest
+    bpy.ops.object.join()
+
+    torso = bpy.context.active_object
+    torso.name = "Torso"
+    return torso
+
+def create_pelvis_mesh(scale):
+    """Create pelvis/hips"""
+    print("  Creating pelvis...")
+
+    bpy.ops.mesh.primitive_cylinder_add(
+        radius=0.16 * scale,
+        depth=0.2 * scale,
+        location=(0, 0, 0.9 * scale),
+        vertices=16
+    )
+    pelvis = bpy.context.active_object
+    pelvis.name = "Pelvis"
+
+    # Make it slightly wider
+    pelvis.scale = (1.1, 0.9, 1.0)
+    bpy.ops.object.transform_apply(scale=True)
+
+    return pelvis
+
+def create_arm_mesh(side, scale):
+    """Create arm (upper arm + forearm + hand) for left or right side"""
+    side_name = "Left" if side == 'L' else "Right"
+    print(f"  Creating {side_name.lower()} arm...")
+
+    # Side multiplier for positioning
+    side_mult = 1 if side == 'L' else -1
+
+    # Shoulder joint
+    bpy.ops.mesh.primitive_uv_sphere_add(
+        radius=0.08 * scale,
+        location=(0.25 * scale * side_mult, 0, 1.55 * scale),
+        segments=12,
+        ring_count=8
+    )
+    shoulder_joint = bpy.context.active_object
+    shoulder_joint.name = f"Arm_Shoulder_{side}"
+
+    # Upper arm
+    bpy.ops.mesh.primitive_cylinder_add(
+        radius=0.055 * scale,
+        depth=0.3 * scale,
+        location=(0.35 * scale * side_mult, 0, 1.35 * scale),
+        vertices=12
+    )
+    upper_arm = bpy.context.active_object
+    upper_arm.name = f"Arm_Upper_{side}"
+    upper_arm.rotation_euler = (0, math.radians(10 * side_mult), 0)
+    bpy.ops.object.transform_apply(rotation=True)
+
+    # Elbow joint
+    bpy.ops.mesh.primitive_uv_sphere_add(
+        radius=0.06 * scale,
+        location=(0.42 * scale * side_mult, 0, 1.2 * scale),
+        segments=12,
+        ring_count=8
+    )
+    elbow_joint = bpy.context.active_object
+    elbow_joint.name = f"Arm_Elbow_{side}"
+
+    # Forearm
+    bpy.ops.mesh.primitive_cylinder_add(
+        radius=0.048 * scale,
+        depth=0.28 * scale,
+        location=(0.51 * scale * side_mult, 0, 1.05 * scale),
+        vertices=12
+    )
+    forearm = bpy.context.active_object
+    forearm.name = f"Arm_Forearm_{side}"
+    forearm.rotation_euler = (0, math.radians(8 * side_mult), 0)
+    bpy.ops.object.transform_apply(rotation=True)
+
+    # Hand
+    bpy.ops.mesh.primitive_cube_add(
+        size=0.15 * scale,
+        location=(0.58 * scale * side_mult, 0, 0.92 * scale)
+    )
+    hand = bpy.context.active_object
+    hand.name = f"Arm_Hand_{side}"
+    hand.scale = (0.6, 0.4, 1.0)
+    bpy.ops.object.transform_apply(scale=True)
+
+    # Join all arm parts
+    bpy.ops.object.select_all(action='DESELECT')
+    for obj in [shoulder_joint, upper_arm, elbow_joint, forearm, hand]:
+        obj.select_set(True)
+    bpy.context.view_layer.objects.active = upper_arm
+    bpy.ops.object.join()
+
+    arm = bpy.context.active_object
+    arm.name = f"Arm_{side}"
+    return arm
+
+def create_leg_mesh(side, scale):
+    """Create leg (thigh + shin + foot) for left or right side"""
+    side_name = "Left" if side == 'L' else "Right"
+    print(f"  Creating {side_name.lower()} leg...")
+
+    # Side multiplier for positioning
+    side_mult = 1 if side == 'L' else -1
+
+    # Hip joint
+    bpy.ops.mesh.primitive_uv_sphere_add(
+        radius=0.08 * scale,
+        location=(0.1 * scale * side_mult, 0, 0.85 * scale),
+        segments=12,
+        ring_count=8
+    )
+    hip_joint = bpy.context.active_object
+    hip_joint.name = f"Leg_Hip_{side}"
+
+    # Thigh
+    bpy.ops.mesh.primitive_cylinder_add(
+        radius=0.07 * scale,
+        depth=0.45 * scale,
+        location=(0.1 * scale * side_mult, 0, 0.6 * scale),
+        vertices=16
+    )
+    thigh = bpy.context.active_object
+    thigh.name = f"Leg_Thigh_{side}"
+
+    # Knee joint
+    bpy.ops.mesh.primitive_uv_sphere_add(
+        radius=0.065 * scale,
+        location=(0.1 * scale * side_mult, 0, 0.375 * scale),
+        segments=12,
+        ring_count=8
+    )
+    knee_joint = bpy.context.active_object
+    knee_joint.name = f"Leg_Knee_{side}"
+
+    # Shin
+    bpy.ops.mesh.primitive_cylinder_add(
+        radius=0.055 * scale,
+        depth=0.40 * scale,
+        location=(0.1 * scale * side_mult, 0, 0.175 * scale),
+        vertices=16
+    )
+    shin = bpy.context.active_object
+    shin.name = f"Leg_Shin_{side}"
+
+    # Ankle joint
+    bpy.ops.mesh.primitive_uv_sphere_add(
+        radius=0.05 * scale,
+        location=(0.1 * scale * side_mult, 0, 0.05 * scale),
+        segments=12,
+        ring_count=8
+    )
+    ankle_joint = bpy.context.active_object
+    ankle_joint.name = f"Leg_Ankle_{side}"
+
+    # Foot
+    bpy.ops.mesh.primitive_cube_add(
+        size=0.16 * scale,
+        location=(0.1 * scale * side_mult, 0.08 * scale, 0.02 * scale)
+    )
+    foot = bpy.context.active_object
+    foot.name = f"Leg_Foot_{side}"
+    foot.scale = (0.6, 1.3, 0.4)
+    bpy.ops.object.transform_apply(scale=True)
+
+    # Join all leg parts
+    bpy.ops.object.select_all(action='DESELECT')
+    for obj in [hip_joint, thigh, knee_joint, shin, ankle_joint, foot]:
+        obj.select_set(True)
+    bpy.context.view_layer.objects.active = thigh
+    bpy.ops.object.join()
+
+    leg = bpy.context.active_object
+    leg.name = f"Leg_{side}"
+    return leg
+
+def create_neck_mesh(scale):
+    """Create neck connecting torso to head"""
+    print("  Creating neck...")
+
+    bpy.ops.mesh.primitive_cylinder_add(
+        radius=0.06 * scale,
+        depth=0.12 * scale,
+        location=(0, 0, 1.68 * scale),
+        vertices=12
+    )
+    neck = bpy.context.active_object
+    neck.name = "Neck"
+    return neck
+
+def create_body_mesh():
+    """Create the body mesh with proper humanoid anatomy"""
+    print("Generating procedural humanoid body mesh...")
+
+    # Scale factor based on avatar height
+    scale = AVATAR_HEIGHT / 1.7
+
+    # Create all body parts
+    torso = create_torso_mesh(scale)
+    pelvis = create_pelvis_mesh(scale)
+    arm_left = create_arm_mesh('L', scale)
+    arm_right = create_arm_mesh('R', scale)
+    leg_left = create_leg_mesh('L', scale)
+    leg_right = create_leg_mesh('R', scale)
+    neck = create_neck_mesh(scale)
+
+    print("  Joining body parts...")
+
+    # Join all body parts into single mesh
+    bpy.ops.object.select_all(action='DESELECT')
+    body_parts = [torso, pelvis, arm_left, arm_right, leg_left, leg_right, neck]
+    for part in body_parts:
+        part.select_set(True)
+
+    bpy.context.view_layer.objects.active = torso
+    bpy.ops.object.join()
+
     body = bpy.context.active_object
     body.name = "Body"
 
-    # Enter edit mode and create basic humanoid shape
-    bpy.ops.object.mode_set(mode='EDIT')
-    bpy.ops.mesh.select_all(action='SELECT')
-
-    # Subdivide for detail
-    bpy.ops.mesh.subdivide(number_cuts=5)
-    bpy.ops.object.mode_set(mode='OBJECT')
-
     # Add subdivision surface for smooth organic areas
+    print("  Adding subdivision surface modifier...")
     subdiv = body.modifiers.new(name="Subdivision", type='SUBSURF')
-    subdiv.levels = 2
-    subdiv.render_levels = 3
+    subdiv.levels = 1
+    subdiv.render_levels = 2
 
-    # Sculpt basic humanoid proportions using proportional editing
-    bpy.ops.object.mode_set(mode='EDIT')
-    bm = bmesh.from_edit_mesh(body.data)
+    # Smooth shading
+    bpy.ops.object.shade_smooth()
 
-    # Simple humanoid shape (this is a simplified version - Rigify will handle the rest)
-    # We'll let the skinning handle most of the body deformation
+    print(f"  Body mesh created with {len(body.data.vertices)} vertices")
 
-    bpy.ops.object.mode_set(mode='OBJECT')
+    # Validate mesh
+    if not validate_body_mesh(body, scale):
+        print("WARNING: Body mesh validation failed!")
 
     return body
+
+def validate_body_mesh(body, scale):
+    """Validate that body mesh has expected geometry"""
+    print("  Validating body mesh...")
+
+    min_verts = 100  # Should have at least 100 vertices for a basic humanoid
+    if len(body.data.vertices) < min_verts:
+        print(f"    ERROR: Body has only {len(body.data.vertices)} vertices (expected >{min_verts})")
+        return False
+
+    # Check bounding box to ensure it's humanoid-shaped (tall, not cube)
+    bbox = [body.matrix_world @ Vector(corner) for corner in body.bound_box]
+    min_z = min(v.z for v in bbox)
+    max_z = max(v.z for v in bbox)
+    height = max_z - min_z
+
+    expected_height = AVATAR_HEIGHT * 0.9  # Allow 10% tolerance
+    if height < expected_height:
+        print(f"    ERROR: Body height {height:.2f}m is less than expected {expected_height:.2f}m")
+        return False
+
+    # Check width (should be much less than height)
+    min_x = min(v.x for v in bbox)
+    max_x = max(v.x for v in bbox)
+    width = max_x - min_x
+
+    if width > height * 0.5:
+        print(f"    WARNING: Body is very wide ({width:.2f}m) relative to height ({height:.2f}m)")
+        print(f"    This might indicate cube-like geometry")
+        return False
+
+    print(f"    ✓ Body mesh validated: {len(body.data.vertices)} vertices, {height:.2f}m tall, {width:.2f}m wide")
+    return True
 
 def create_mechanical_asymmetry(body):
     """Add Dwemer-style mechanical plating to half of the body"""
@@ -535,45 +815,179 @@ def apply_automatic_weights(rig):
     else:
         print("Warning: No mesh objects found to rig!")
 
+def log_scene_statistics():
+    """Log detailed statistics about generated scene"""
+    print("\n" + "=" * 60)
+    print("SCENE STATISTICS")
+    print("=" * 60)
+
+    # Count objects by type
+    object_counts = {}
+    for obj in bpy.data.objects:
+        obj_type = obj.type
+        object_counts[obj_type] = object_counts.get(obj_type, 0) + 1
+
+    print("Object counts:")
+    for obj_type, count in sorted(object_counts.items()):
+        print(f"  {obj_type}: {count}")
+
+    # Mesh statistics
+    mesh_objects = [obj for obj in bpy.data.objects if obj.type == 'MESH']
+    if mesh_objects:
+        total_verts = sum(len(obj.data.vertices) for obj in mesh_objects)
+        total_faces = sum(len(obj.data.polygons) for obj in mesh_objects)
+        print(f"\nMesh statistics:")
+        print(f"  Total vertices: {total_verts}")
+        print(f"  Total faces: {total_faces}")
+        print(f"  Mesh objects: {len(mesh_objects)}")
+
+    # Armature statistics
+    armatures = [obj for obj in bpy.data.objects if obj.type == 'ARMATURE']
+    if armatures:
+        print(f"\nArmature statistics:")
+        for arm in armatures:
+            bone_count = len(arm.data.bones)
+            print(f"  {arm.name}: {bone_count} bones")
+
+    # Material statistics
+    print(f"\nMaterials: {len(bpy.data.materials)}")
+
+    # Scene bounds
+    if mesh_objects:
+        all_coords = []
+        for obj in mesh_objects:
+            for v in obj.data.vertices:
+                all_coords.append(obj.matrix_world @ v.co)
+
+        if all_coords:
+            min_x = min(v.x for v in all_coords)
+            max_x = max(v.x for v in all_coords)
+            min_y = min(v.y for v in all_coords)
+            max_y = max(v.y for v in all_coords)
+            min_z = min(v.z for v in all_coords)
+            max_z = max(v.z for v in all_coords)
+
+            width = max_x - min_x
+            depth = max_y - min_y
+            height = max_z - min_z
+
+            print(f"\nScene bounds:")
+            print(f"  Width (X): {width:.2f}m ({min_x:.2f} to {max_x:.2f})")
+            print(f"  Depth (Y): {depth:.2f}m ({min_y:.2f} to {max_y:.2f})")
+            print(f"  Height (Z): {height:.2f}m ({min_z:.2f} to {max_z:.2f})")
+            print(f"  Expected height: ~{AVATAR_HEIGHT:.2f}m")
+
+            if height < AVATAR_HEIGHT * 0.8:
+                print(f"  ⚠ WARNING: Avatar is shorter than expected!")
+            elif height > AVATAR_HEIGHT * 1.2:
+                print(f"  ⚠ WARNING: Avatar is taller than expected!")
+            else:
+                print(f"  ✓ Height is within expected range")
+
+    print("=" * 60 + "\n")
+
 def main():
     """Main generation pipeline"""
+    import os
+    import sys
+
     print("=" * 60)
     print("THE FORGOTTEN ARCHITECT - Procedural Avatar Generation")
     print("=" * 60)
+    print(f"Blender version: {bpy.app.version_string}")
+    print(f"Python version: {sys.version}")
+    print(f"Target avatar height: {AVATAR_HEIGHT}m")
+    print(f"Working directory: {os.getcwd()}")
+    print("=" * 60 + "\n")
 
-    clear_scene()
+    try:
+        # Step 1: Clear scene
+        print("STEP 1: Clearing scene...")
+        clear_scene()
+        print("  ✓ Scene cleared\n")
 
-    # Create base armature
-    metarig = create_base_body()
+        # Step 2: Create base armature
+        print("STEP 2: Creating base armature...")
+        metarig = create_base_body()
+        if not metarig:
+            print("  ✗ ERROR: Failed to create armature!")
+            return
+        print(f"  ✓ Armature created: {metarig.name}\n")
 
-    # Create body mesh
-    body = create_body_mesh()
+        # Step 3: Create body mesh
+        print("STEP 3: Creating body mesh...")
+        body = create_body_mesh()
+        if not body:
+            print("  ✗ ERROR: Failed to create body mesh!")
+            return
+        print(f"  ✓ Body mesh created: {body.name}\n")
 
-    # Create head with asymmetric plating
-    head = create_head()
+        # Step 4: Create head with asymmetric plating
+        print("STEP 4: Creating head...")
+        head = create_head()
+        if not head:
+            print("  ✗ ERROR: Failed to create head!")
+            return
+        print(f"  ✓ Head created: {head.name}\n")
 
-    # Create mechanical corruption
-    mechanical_parts = create_mechanical_asymmetry(body)
+        # Step 5: Create mechanical corruption
+        print("STEP 5: Adding mechanical corruption...")
+        mechanical_parts = create_mechanical_asymmetry(body)
+        print(f"  ✓ Created {len(mechanical_parts)} mechanical parts\n")
 
-    # Create hair-to-cable tendrils
-    tendrils = create_hair_tendrils()
+        # Step 6: Create hair-to-cable tendrils
+        print("STEP 6: Creating hair tendrils...")
+        tendrils = create_hair_tendrils()
+        print(f"  ✓ Created {len(tendrils)} tendrils\n")
 
-    # Setup rigging
-    rig = setup_armature_and_rig()
+        # Step 7: Setup rigging
+        print("STEP 7: Setting up rigging...")
+        rig = setup_armature_and_rig()
+        if not rig:
+            print("  ✗ ERROR: Failed to setup rigging!")
+            return
+        print(f"  ✓ Rig setup complete: {rig.name}\n")
 
-    # Apply skinning
-    apply_automatic_weights(rig)
+        # Step 8: Apply skinning
+        print("STEP 8: Applying automatic weights...")
+        apply_automatic_weights(rig)
+        print("  ✓ Skinning complete\n")
 
-    print("=" * 60)
-    print("Avatar generation complete!")
-    print("=" * 60)
+        # Log statistics
+        log_scene_statistics()
 
-    # Save file (use relative path)
-    import os
-    output_path = os.path.abspath("Avatar/ForgottenArchitect.blend")
-    print(f"Saving to: {output_path}")
-    bpy.ops.wm.save_as_mainfile(filepath=output_path)
-    print(f"Saved successfully!")
+        print("=" * 60)
+        print("✓ AVATAR GENERATION COMPLETE!")
+        print("=" * 60)
+
+        # Save file
+        output_path = os.path.abspath("Avatar/ForgottenArchitect.blend")
+        print(f"\nSaving to: {output_path}")
+        os.makedirs(os.path.dirname(output_path), exist_ok=True)
+        bpy.ops.wm.save_as_mainfile(filepath=output_path)
+        print(f"✓ File saved successfully!")
+
+        # Final validation
+        file_size = os.path.getsize(output_path)
+        print(f"✓ File size: {file_size / 1024:.1f} KB")
+
+        if file_size < 10000:  # Less than 10KB is suspicious
+            print("⚠ WARNING: File size is very small - generation may have failed!")
+            return
+
+        print("\n" + "=" * 60)
+        print("Generation completed successfully!")
+        print("=" * 60)
+
+    except Exception as e:
+        print("\n" + "=" * 60)
+        print("✗ FATAL ERROR DURING GENERATION")
+        print("=" * 60)
+        print(f"Error: {e}")
+        import traceback
+        traceback.print_exc()
+        print("=" * 60)
+        raise
 
 if __name__ == "__main__":
     main()

@@ -120,14 +120,76 @@ def setup_environment():
 
 def find_avatar_rig():
     """Find the avatar armature"""
+    print("Searching for avatar rig...")
     for obj in bpy.data.objects:
         if obj.type == 'ARMATURE' and 'Forgotten' in obj.name:
+            print(f"  Found rig: {obj.name}")
             return obj
     # Fallback: return first armature
     for obj in bpy.data.objects:
         if obj.type == 'ARMATURE':
+            print(f"  Found armature (fallback): {obj.name}")
             return obj
+    print("  ERROR: No armature found in scene!")
     return None
+
+def validate_scene():
+    """Validate scene has required objects and geometry"""
+    print("Validating scene before rendering...")
+
+    issues = []
+
+    # Check for armature
+    rig = find_avatar_rig()
+    if not rig:
+        issues.append("No armature found")
+
+    # Check for mesh objects
+    mesh_objects = [obj for obj in bpy.data.objects if obj.type == 'MESH' and not obj.name.startswith('WGT-')]
+    if len(mesh_objects) == 0:
+        issues.append("No mesh objects found")
+    else:
+        print(f"  Found {len(mesh_objects)} mesh objects:")
+        total_verts = 0
+        for obj in mesh_objects:
+            vert_count = len(obj.data.vertices)
+            total_verts += vert_count
+            print(f"    - {obj.name}: {vert_count} vertices")
+
+        if total_verts < 100:
+            issues.append(f"Very low vertex count: {total_verts} (expected >100)")
+
+    # Check scene bounds (should be humanoid-sized)
+    if mesh_objects:
+        # Calculate combined bounding box
+        all_coords = []
+        for obj in mesh_objects:
+            for v in obj.data.vertices:
+                all_coords.append(obj.matrix_world @ v.co)
+
+        if all_coords:
+            min_z = min(v.z for v in all_coords)
+            max_z = max(v.z for v in all_coords)
+            height = max_z - min_z
+
+            print(f"  Scene height: {height:.2f}m (min_z: {min_z:.2f}, max_z: {max_z:.2f})")
+
+            if height < 1.0:
+                issues.append(f"Scene height too small: {height:.2f}m (expected ~2m)")
+
+            # Check if geometry is near origin (not floating far away)
+            if min_z > 5.0 or min_z < -5.0:
+                issues.append(f"Geometry is far from origin (min_z: {min_z:.2f}m)")
+
+    if issues:
+        print("  ⚠ VALIDATION WARNINGS:")
+        for issue in issues:
+            print(f"    - {issue}")
+        print("  Rendering will continue but results may be incorrect")
+        return False
+    else:
+        print("  ✓ Scene validation passed")
+        return True
 
 def get_rig_target(rig):
     """Return a point for the camera to look at."""
@@ -231,6 +293,11 @@ def main():
         print(f"ERROR: {blend_file} not found!")
         return
 
+    # Validate scene first
+    validation_passed = validate_scene()
+    if not validation_passed:
+        print("⚠ Scene validation failed - screenshots may not render correctly!")
+
     # Setup scene
     setup_render_settings()
     setup_environment()
@@ -239,10 +306,9 @@ def main():
 
     # Find rig
     rig = find_avatar_rig()
-    if rig:
-        print(f"Found rig: {rig.name}")
-    else:
-        print("Warning: No rig found")
+    if not rig:
+        print("ERROR: No rig found - cannot position camera!")
+        print("Attempting to render anyway with default camera position...")
 
     # Render views
     render_view(camera, 'front', rig)

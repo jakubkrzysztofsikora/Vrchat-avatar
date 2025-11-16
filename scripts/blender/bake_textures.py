@@ -196,24 +196,88 @@ def create_vrchat_materials():
 
 def main():
     """Main baking pipeline"""
+    import sys
+
     print("=" * 60)
     print("TEXTURE BAKING PIPELINE")
     print("=" * 60)
+    print(f"Blender version: {bpy.app.version_string}")
+    print(f"Python version: {sys.version}")
+    print(f"Output directory: {OUTPUT_DIR}")
+    print("=" * 60 + "\n")
 
-    # Load the generated avatar
-    blend_file = os.path.abspath("Avatar/ForgottenArchitect.blend")
-    if os.path.exists(blend_file):
+    try:
+        # Load the generated avatar
+        blend_file = os.path.abspath("Avatar/ForgottenArchitect.blend")
+        print(f"Loading avatar file: {blend_file}")
+
+        if not os.path.exists(blend_file):
+            print(f"✗ ERROR: {blend_file} not found!")
+            print("Make sure generate_avatar.py has been run first.")
+            return
+
+        file_size = os.path.getsize(blend_file)
+        print(f"File size: {file_size / 1024:.1f} KB")
+
+        if file_size < 10000:
+            print("⚠ WARNING: Blend file is very small - may be corrupted or empty!")
+
         bpy.ops.wm.open_mainfile(filepath=blend_file)
-    else:
-        print(f"Warning: {blend_file} not found!")
+        print("✓ Avatar file loaded\n")
 
-    setup_baking()
-    bake_all_textures()
-    create_vrchat_materials()
+        # Count mesh objects
+        mesh_objects = [obj for obj in bpy.data.objects if obj.type == 'MESH' and not obj.name.startswith('WGT-')]
+        print(f"Found {len(mesh_objects)} mesh objects to bake")
 
-    # Save with baked textures
-    bpy.ops.wm.save_as_mainfile(filepath=blend_file)
-    print("Baking complete and saved!")
+        if len(mesh_objects) == 0:
+            print("✗ ERROR: No mesh objects found in scene!")
+            return
+
+        print(f"Mesh objects: {[obj.name for obj in mesh_objects]}\n")
+
+        # Setup and bake
+        print("STEP 1: Setting up baking...")
+        setup_baking()
+        print("  ✓ Baking setup complete\n")
+
+        print("STEP 2: Baking textures...")
+        bake_all_textures()
+        print("  ✓ Texture baking complete\n")
+
+        print("STEP 3: Creating VRChat materials...")
+        create_vrchat_materials()
+        print("  ✓ VRChat materials created\n")
+
+        # Verify textures were created
+        if os.path.exists(OUTPUT_DIR):
+            texture_files = [f for f in os.listdir(OUTPUT_DIR) if f.endswith('.png')]
+            print(f"Created {len(texture_files)} texture files:")
+            for tex_file in texture_files:
+                tex_path = os.path.join(OUTPUT_DIR, tex_file)
+                tex_size = os.path.getsize(tex_path) / 1024
+                print(f"  - {tex_file} ({tex_size:.1f} KB)")
+
+            if len(texture_files) == 0:
+                print("⚠ WARNING: No texture files were created!")
+
+        # Save with baked textures
+        print("\nSaving blend file with baked textures...")
+        bpy.ops.wm.save_as_mainfile(filepath=blend_file)
+        print("✓ File saved successfully!")
+
+        print("\n" + "=" * 60)
+        print("✓ TEXTURE BAKING COMPLETE!")
+        print("=" * 60)
+
+    except Exception as e:
+        print("\n" + "=" * 60)
+        print("✗ FATAL ERROR DURING TEXTURE BAKING")
+        print("=" * 60)
+        print(f"Error: {e}")
+        import traceback
+        traceback.print_exc()
+        print("=" * 60)
+        raise
 
 if __name__ == "__main__":
     main()
