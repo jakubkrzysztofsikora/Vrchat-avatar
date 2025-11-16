@@ -173,7 +173,7 @@ def get_rig_target(rig, fallback_center):
 def point_camera_at(camera, target_point):
     """Rotate the camera so it looks at the provided target point."""
     direction = target_point - camera.location
-    if direction.length == 0:
+    if direction.length < 1e-6:
         return
     rotation = direction.to_track_quat('-Z', 'Y').to_euler()
     camera.rotation_euler = rotation
