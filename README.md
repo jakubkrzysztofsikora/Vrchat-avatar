@@ -36,7 +36,13 @@
 <div align="center">
 
 <!-- AUTO-GENERATED-SCREENSHOTS -->
-⚠️ *Screenshots are being generated... Check back after the build completes!*
+<!-- Last updated: 2025-11-16 11:46:06 UTC -->
+
+| | |
+|:---:|:---:|
+| **Front View**<br/><img src="docs/screenshots/front.png" alt="Front View" width="400"/> | **Back View**<br/><img src="docs/screenshots/back.png" alt="Back View" width="400"/> |
+| **Face Detail (Mechanical Eye)**<br/><img src="docs/screenshots/face.png" alt="Face Detail (Mechanical Eye)" width="400"/> | **Emote: Mechanical Unfold**<br/><img src="docs/screenshots/pose1.png" alt="Emote: Mechanical Unfold" width="400"/> |
+| **Emote: The Stare**<br/><img src="docs/screenshots/pose2.png" alt="Emote: The Stare" width="400"/> |  |
 
 <!-- END-AUTO-GENERATED-SCREENSHOTS -->
 
