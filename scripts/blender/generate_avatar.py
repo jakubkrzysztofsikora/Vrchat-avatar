@@ -487,21 +487,53 @@ def apply_automatic_weights(rig):
     """Apply automatic skinning weights to mesh"""
     print("Applying automatic weights...")
 
-    # Select mesh objects
-    mesh_objects = [obj for obj in bpy.data.objects if obj.type == 'MESH']
+    # Deselect all first
+    bpy.ops.object.select_all(action='DESELECT')
 
-    for mesh_obj in mesh_objects:
-        # Skip tendril curves
-        if 'Tendril' in mesh_obj.name:
+    # Get all mesh objects in the current view layer
+    # Filter out widget objects (WGT-*) created by Rigify
+    view_layer = bpy.context.view_layer
+    mesh_objects = []
+
+    for obj in bpy.context.scene.objects:
+        # Skip if not a mesh
+        if obj.type != 'MESH':
             continue
 
+        # Skip tendril curves
+        if 'Tendril' in obj.name:
+            continue
+
+        # Skip Rigify widget objects
+        if obj.name.startswith('WGT-'):
+            continue
+
+        # Skip if not in view layer
+        if obj.name not in view_layer.objects:
+            continue
+
+        mesh_objects.append(obj)
+
+    print(f"Found {len(mesh_objects)} mesh objects to rig")
+
+    # Select mesh objects
+    for mesh_obj in mesh_objects:
         mesh_obj.select_set(True)
 
+    # Select rig and set as active
     rig.select_set(True)
     bpy.context.view_layer.objects.active = rig
 
     # Parent with automatic weights
-    bpy.ops.object.parent_set(type='ARMATURE_AUTO')
+    if len(mesh_objects) > 0:
+        try:
+            bpy.ops.object.parent_set(type='ARMATURE_AUTO')
+            print("Automatic weights applied successfully!")
+        except Exception as e:
+            print(f"Warning: Automatic weights failed: {e}")
+            print("Meshes will need manual weight painting")
+    else:
+        print("Warning: No mesh objects found to rig!")
 
 def main():
     """Main generation pipeline"""
