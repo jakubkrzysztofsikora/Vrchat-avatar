@@ -87,8 +87,14 @@ def bake_all_textures():
 
     os.makedirs(OUTPUT_DIR, exist_ok=True)
 
-    # Get all mesh objects
-    mesh_objects = [obj for obj in bpy.data.objects if obj.type == 'MESH']
+    # Get all mesh objects (excluding Rigify widgets)
+    view_layer = bpy.context.view_layer
+    mesh_objects = []
+    for obj in bpy.data.objects:
+        if obj.type == 'MESH' and not obj.name.startswith('WGT-') and obj.name in view_layer.objects:
+            mesh_objects.append(obj)
+
+    print(f"Found {len(mesh_objects)} mesh objects to bake")
 
     for obj in mesh_objects:
         print(f"\nProcessing {obj.name}...")
@@ -112,8 +118,17 @@ def create_vrchat_materials():
     """Create VRChat-compatible materials using baked textures"""
     print("Creating VRChat materials...")
 
+    view_layer = bpy.context.view_layer
     for obj in bpy.data.objects:
         if obj.type != 'MESH':
+            continue
+
+        # Skip Rigify widgets
+        if obj.name.startswith('WGT-'):
+            continue
+
+        # Skip if not in view layer
+        if obj.name not in view_layer.objects:
             continue
 
         # Create new material

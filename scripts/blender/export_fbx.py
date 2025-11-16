@@ -13,16 +13,32 @@ def prepare_for_export():
     """Prepare scene for Unity-compatible FBX export"""
     print("Preparing for FBX export...")
 
+    # Get view layer
+    view_layer = bpy.context.view_layer
+
     # Apply all modifiers except Armature
     for obj in bpy.data.objects:
-        if obj.type == 'MESH':
-            bpy.context.view_layer.objects.active = obj
-            for modifier in obj.modifiers:
-                if modifier.type != 'ARMATURE':
-                    try:
-                        bpy.ops.object.modifier_apply(modifier=modifier.name)
-                    except:
-                        print(f"Could not apply modifier {modifier.name} on {obj.name}")
+        # Skip non-mesh objects
+        if obj.type != 'MESH':
+            continue
+
+        # Skip Rigify widget objects
+        if obj.name.startswith('WGT-'):
+            continue
+
+        # Skip if not in view layer
+        if obj.name not in view_layer.objects:
+            continue
+
+        # Set as active and apply modifiers
+        bpy.context.view_layer.objects.active = obj
+        for modifier in obj.modifiers:
+            if modifier.type != 'ARMATURE':
+                try:
+                    bpy.ops.object.modifier_apply(modifier=modifier.name)
+                    print(f"Applied modifier {modifier.name} on {obj.name}")
+                except Exception as e:
+                    print(f"Could not apply modifier {modifier.name} on {obj.name}: {e}")
 
 def export_to_fbx():
     """Export scene to FBX with VRChat-compatible settings"""
