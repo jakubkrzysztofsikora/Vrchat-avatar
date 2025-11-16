@@ -7,7 +7,7 @@ Bakes procedural materials to PBR texture maps (BaseColor, Normal, Metallic, Rou
 import bpy
 import os
 
-OUTPUT_DIR = "/home/user/Vrchat-avatar/Avatar/Textures"
+OUTPUT_DIR = os.path.abspath("Avatar/Textures")
 TEXTURE_RESOLUTION = 2048
 
 def setup_baking():
@@ -186,9 +186,11 @@ def main():
     print("=" * 60)
 
     # Load the generated avatar
-    blend_file = "/home/user/Vrchat-avatar/Avatar/ForgottenArchitect.blend"
+    blend_file = os.path.abspath("Avatar/ForgottenArchitect.blend")
     if os.path.exists(blend_file):
         bpy.ops.wm.open_mainfile(filepath=blend_file)
+    else:
+        print(f"Warning: {blend_file} not found!")
 
     setup_baking()
     bake_all_textures()

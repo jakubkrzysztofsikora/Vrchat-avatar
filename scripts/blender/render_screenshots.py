@@ -13,7 +13,7 @@ import bpy
 import os
 import math
 
-OUTPUT_DIR = "/home/user/Vrchat-avatar/docs/screenshots"
+OUTPUT_DIR = os.path.abspath("docs/screenshots")
 RESOLUTION_X = 1920
 RESOLUTION_Y = 1080
 
@@ -205,9 +205,12 @@ def main():
     os.makedirs(OUTPUT_DIR, exist_ok=True)
 
     # Load the avatar
-    blend_file = "/home/user/Vrchat-avatar/Avatar/ForgottenArchitect.blend"
+    blend_file = os.path.abspath("Avatar/ForgottenArchitect.blend")
     if os.path.exists(blend_file):
         bpy.ops.wm.open_mainfile(filepath=blend_file)
+    else:
+        print(f"ERROR: {blend_file} not found!")
+        return
 
     # Setup scene
     setup_render_settings()

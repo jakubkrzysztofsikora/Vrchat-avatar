@@ -7,7 +7,7 @@ Exports the final avatar with all animations for Unity import
 import bpy
 import os
 
-OUTPUT_PATH = "/home/user/Vrchat-avatar/Avatar/ForgottenArchitect.fbx"
+OUTPUT_PATH = os.path.abspath("Avatar/ForgottenArchitect.fbx")
 
 def prepare_for_export():
     """Prepare scene for Unity-compatible FBX export"""
@@ -76,11 +76,12 @@ def main():
     print("=" * 60)
 
     # Load the final avatar
-    blend_file = "/home/user/Vrchat-avatar/Avatar/ForgottenArchitect.blend"
+    blend_file = os.path.abspath("Avatar/ForgottenArchitect.blend")
     if os.path.exists(blend_file):
         bpy.ops.wm.open_mainfile(filepath=blend_file)
     else:
-        print(f"WARNING: {blend_file} not found, using current scene")
+        print(f"ERROR: {blend_file} not found!")
+        return
 
     prepare_for_export()
     export_to_fbx()

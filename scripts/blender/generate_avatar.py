@@ -568,10 +568,12 @@ def main():
     print("Avatar generation complete!")
     print("=" * 60)
 
-    # Save file
-    output_path = "/home/user/Vrchat-avatar/Avatar/ForgottenArchitect.blend"
+    # Save file (use relative path)
+    import os
+    output_path = os.path.abspath("Avatar/ForgottenArchitect.blend")
+    print(f"Saving to: {output_path}")
     bpy.ops.wm.save_as_mainfile(filepath=output_path)
-    print(f"Saved to: {output_path}")
+    print(f"Saved successfully!")
 
 if __name__ == "__main__":
     main()

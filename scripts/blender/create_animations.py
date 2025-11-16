@@ -12,7 +12,7 @@ import bpy
 import math
 import os
 
-ANIM_OUTPUT_DIR = "/home/user/Vrchat-avatar/Avatar/Animations"
+ANIM_OUTPUT_DIR = os.path.abspath("Avatar/Animations")
 
 def clear_animation(obj):
     """Clear existing animation data"""
@@ -254,9 +254,11 @@ def main():
     print("=" * 60)
 
     # Load the rigged avatar
-    blend_file = "/home/user/Vrchat-avatar/Avatar/ForgottenArchitect.blend"
+    blend_file = os.path.abspath("Avatar/ForgottenArchitect.blend")
     if os.path.exists(blend_file):
         bpy.ops.wm.open_mainfile(filepath=blend_file)
+    else:
+        print(f"ERROR: {blend_file} not found!")
 
     # Find the rig
     rig = None
