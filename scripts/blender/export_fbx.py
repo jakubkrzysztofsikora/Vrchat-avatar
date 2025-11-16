@@ -36,9 +36,9 @@ def prepare_for_export():
             if modifier.type != 'ARMATURE':
                 try:
                     bpy.ops.object.modifier_apply(modifier=modifier.name)
-                    print(f"Applied modifier {modifier.name} on {obj.name}")
+                    print(f"Applied modifier {repr(modifier.name)} on {repr(obj.name)}")
                 except Exception as e:
-                    print(f"Could not apply modifier {modifier.name} on {obj.name}: {e}")
+                    print(f"Could not apply modifier {repr(modifier.name)} on {repr(obj.name)}: {e}")
 
 def export_to_fbx():
     """Export scene to FBX with VRChat-compatible settings"""
