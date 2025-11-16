@@ -352,10 +352,16 @@ def create_skin_material(obj):
 
     bsdf = nodes.new(type='ShaderNodeBsdfPrincipled')
     bsdf.location = (0, 0)
-    bsdf.inputs['Base Color'].default_value = (0.85, 0.78, 0.72, 1.0)  # Pale skin
-    bsdf.inputs['Subsurface'].default_value = 0.1
-    bsdf.inputs['Subsurface Color'].default_value = (0.9, 0.6, 0.5, 1.0)
-    bsdf.inputs['Roughness'].default_value = 0.4
+
+    def set_input(name, value):
+        socket = bsdf.inputs.get(name)
+        if socket is not None:
+            socket.default_value = value
+
+    set_input('Base Color', (0.85, 0.78, 0.72, 1.0))  # Pale skin
+    set_input('Subsurface', 0.1)
+    set_input('Subsurface Color', (0.9, 0.6, 0.5, 1.0))
+    set_input('Roughness', 0.4)
 
     output = nodes.new(type='ShaderNodeOutputMaterial')
     output.location = (200, 0)
@@ -371,9 +377,15 @@ def create_hair_material(obj):
     nodes.clear()
 
     bsdf = nodes.new(type='ShaderNodeBsdfPrincipled')
-    bsdf.inputs['Base Color'].default_value = (0.02, 0.02, 0.02, 1.0)
-    bsdf.inputs['Roughness'].default_value = 0.3
-    bsdf.inputs['Sheen'].default_value = 0.5
+
+    def set_input(name, value):
+        socket = bsdf.inputs.get(name)
+        if socket is not None:
+            socket.default_value = value
+
+    set_input('Base Color', (0.02, 0.02, 0.02, 1.0))
+    set_input('Roughness', 0.3)
+    set_input('Sheen', 0.5)
 
     output = nodes.new(type='ShaderNodeOutputMaterial')
     mat.node_tree.links.new(bsdf.outputs['BSDF'], output.inputs['Surface'])
