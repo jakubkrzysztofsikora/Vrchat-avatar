@@ -12,6 +12,7 @@ import bmesh
 import math
 import mathutils
 import random
+import addon_utils
 from mathutils import Vector, Matrix
 
 # Configuration
@@ -19,25 +20,122 @@ AVATAR_HEIGHT = 2.1  # Tall male
 SEED = 42
 random.seed(SEED)
 
+def enable_rigify():
+    """Enable Rigify addon"""
+    print("Enabling Rigify addon...")
+
+    # Enable Rigify addon
+    addon_utils.enable("rigify", default_set=True, persistent=True)
+
+    # Verify it's enabled
+    if "rigify" in bpy.context.preferences.addons:
+        print("Rigify enabled successfully!")
+        return True
+    else:
+        print("WARNING: Rigify could not be enabled!")
+        return False
+
 def clear_scene():
     """Remove default objects"""
     bpy.ops.object.select_all(action='SELECT')
     bpy.ops.object.delete(use_global=False)
 
+def create_manual_armature():
+    """Create a basic humanoid armature manually (fallback if Rigify fails)"""
+    print("Creating manual humanoid armature (Rigify fallback)...")
+
+    # Create armature
+    bpy.ops.object.armature_add(location=(0, 0, 0))
+    armature = bpy.context.active_object
+    armature.name = "ForgottenArchitect_Rig"
+    armature.show_in_front = True
+
+    # Enter edit mode to add bones
+    bpy.ops.object.mode_set(mode='EDIT')
+
+    # Get armature data
+    arm_data = armature.data
+    bones = arm_data.edit_bones
+
+    # Clear default bone
+    bones.clear()
+
+    # Helper function to create bone
+    def add_bone(name, head, tail, parent=None):
+        bone = bones.new(name)
+        bone.head = head
+        bone.tail = tail
+        if parent:
+            bone.parent = bones[parent]
+        return bone
+
+    # Create spine chain (scaled for tall character)
+    scale = AVATAR_HEIGHT / 1.7
+
+    # Spine
+    add_bone("spine", (0, 0, 0.9 * scale), (0, 0, 1.1 * scale))
+    add_bone("spine.001", (0, 0, 1.1 * scale), (0, 0, 1.3 * scale), "spine")
+    add_bone("spine.002", (0, 0, 1.3 * scale), (0, 0, 1.5 * scale), "spine.001")
+    add_bone("chest", (0, 0, 1.5 * scale), (0, 0, 1.7 * scale), "spine.002")
+
+    # Neck and head
+    add_bone("neck", (0, 0, 1.7 * scale), (0, 0, 1.8 * scale), "chest")
+    add_bone("head", (0, 0, 1.8 * scale), (0, 0, 2.0 * scale), "neck")
+
+    # Left leg
+    add_bone("thigh.L", (0.1 * scale, 0, 0.9 * scale), (0.1 * scale, 0, 0.45 * scale), "spine")
+    add_bone("shin.L", (0.1 * scale, 0, 0.45 * scale), (0.1 * scale, 0, 0.05 * scale), "thigh.L")
+    add_bone("foot.L", (0.1 * scale, 0, 0.05 * scale), (0.1 * scale, 0.15 * scale, 0), "shin.L")
+
+    # Right leg
+    add_bone("thigh.R", (-0.1 * scale, 0, 0.9 * scale), (-0.1 * scale, 0, 0.45 * scale), "spine")
+    add_bone("shin.R", (-0.1 * scale, 0, 0.45 * scale), (-0.1 * scale, 0, 0.05 * scale), "thigh.R")
+    add_bone("foot.R", (-0.1 * scale, 0, 0.05 * scale), (-0.1 * scale, 0.15 * scale, 0), "shin.R")
+
+    # Left arm
+    add_bone("shoulder.L", (0.05 * scale, 0, 1.65 * scale), (0.2 * scale, 0, 1.6 * scale), "chest")
+    add_bone("upper_arm.L", (0.2 * scale, 0, 1.6 * scale), (0.45 * scale, 0, 1.3 * scale), "shoulder.L")
+    add_bone("forearm.L", (0.45 * scale, 0, 1.3 * scale), (0.7 * scale, 0, 1.1 * scale), "upper_arm.L")
+    add_bone("hand.L", (0.7 * scale, 0, 1.1 * scale), (0.8 * scale, 0, 1.05 * scale), "forearm.L")
+
+    # Right arm
+    add_bone("shoulder.R", (-0.05 * scale, 0, 1.65 * scale), (-0.2 * scale, 0, 1.6 * scale), "chest")
+    add_bone("upper_arm.R", (-0.2 * scale, 0, 1.6 * scale), (-0.45 * scale, 0, 1.3 * scale), "shoulder.R")
+    add_bone("forearm.R", (-0.45 * scale, 0, 1.3 * scale), (-0.7 * scale, 0, 1.1 * scale), "upper_arm.R")
+    add_bone("hand.R", (-0.7 * scale, 0, 1.1 * scale), (-0.8 * scale, 0, 1.05 * scale), "forearm.R")
+
+    # Return to object mode
+    bpy.ops.object.mode_set(mode='OBJECT')
+
+    print(f"Created manual armature with {len(bones)} bones")
+    return armature
+
 def create_base_body():
-    """Create base humanoid body using meta-rig for Rigify"""
-    print("Creating base humanoid meta-rig...")
+    """Create base humanoid body using meta-rig for Rigify (with fallback)"""
+    print("Creating base humanoid armature...")
 
-    # Add Rigify meta-rig (basic human)
-    bpy.ops.object.armature_basic_human_metarig_add()
-    metarig = bpy.context.active_object
-    metarig.name = "ForgottenArchitect_MetaRig"
+    # Try to use Rigify first
+    rigify_enabled = enable_rigify()
 
-    # Scale to tall male proportions
-    metarig.scale = (1.0, 1.0, AVATAR_HEIGHT / 1.7)
-    bpy.ops.object.transform_apply(scale=True)
+    if rigify_enabled:
+        try:
+            # Try to add Rigify metarig
+            bpy.ops.object.armature_basic_human_metarig_add()
+            metarig = bpy.context.active_object
+            metarig.name = "ForgottenArchitect_MetaRig"
 
-    return metarig
+            # Scale to tall male proportions
+            metarig.scale = (1.0, 1.0, AVATAR_HEIGHT / 1.7)
+            bpy.ops.object.transform_apply(scale=True)
+
+            print("Rigify meta-rig created successfully!")
+            return metarig
+        except Exception as e:
+            print(f"Rigify meta-rig failed: {e}")
+            print("Falling back to manual armature creation...")
+
+    # Fallback: create manual armature
+    return create_manual_armature()
 
 def create_body_mesh():
     """Create the body mesh with asymmetric mechanical corruption"""
@@ -349,28 +447,38 @@ def join_body_parts():
     # bpy.ops.object.join()
 
 def setup_armature_and_rig():
-    """Generate Rigify rig and bind mesh"""
-    print("Setting up Rigify armature...")
+    """Generate Rigify rig and bind mesh (or use manual rig)"""
+    print("Setting up armature...")
 
-    # Select meta-rig
+    # Check for existing rig
+    rig = bpy.data.objects.get('ForgottenArchitect_Rig')
+    if rig:
+        print("Using existing manual rig")
+        return rig
+
+    # Check for meta-rig
     metarig = bpy.data.objects.get('ForgottenArchitect_MetaRig')
     if not metarig:
-        print("Meta-rig not found, creating new one...")
+        print("No rig found, creating new one...")
         metarig = create_base_body()
 
     bpy.context.view_layer.objects.active = metarig
     metarig.select_set(True)
 
-    # Generate Rigify rig
-    # Note: Rigify must be enabled in Blender preferences
-    try:
-        bpy.ops.pose.rigify_generate()
-        print("Rigify rig generated successfully")
-        rig = bpy.context.active_object
-        rig.name = "ForgottenArchitect_Rig"
-    except Exception as e:
-        print(f"Rigify generation failed: {e}")
-        print("Using meta-rig as base armature")
+    # Try to generate Rigify rig if we have a meta-rig
+    if metarig.name == 'ForgottenArchitect_MetaRig':
+        try:
+            bpy.ops.pose.rigify_generate()
+            print("Rigify rig generated successfully")
+            rig = bpy.context.active_object
+            rig.name = "ForgottenArchitect_Rig"
+        except Exception as e:
+            print(f"Rigify generation failed: {e}")
+            print("Using meta-rig as base armature")
+            rig = metarig
+            rig.name = "ForgottenArchitect_Rig"
+    else:
+        # Already using manual rig
         rig = metarig
 
     return rig
