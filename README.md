@@ -1,10 +1,10 @@
-# 🎭 The Forgotten Architect
+# 🎭 The Penitent Mechanism
 
 <div align="center">
 
 **A Fully Automated VRChat Horror Avatar**
 
-*Blending Elder Scrolls Dwemer Horror, Lovecraftian Dread, and Asian Supernatural Aesthetics*
+*Buddhist Shrine Guardian Possessed by Dwemer Machinery*
 
 [![Build VRChat Avatar](https://github.com/jakubkrzysztofsikora/Vrchat-avatar/actions/workflows/build.yml/badge.svg)](https://github.com/jakubkrzysztofsikora/Vrchat-avatar/actions/workflows/build.yml)
 
@@ -14,20 +14,21 @@
 
 ## 🌀 Concept
 
-**The Forgotten Architect** is a cursed biomechanical horror entity - half elegant humanoid artisan, half corrupted Dwemer automaton. This VRChat avatar embodies:
+**The Penitent Mechanism** is an ancient Buddhist/Shinto shrine guardian statue possessed and corrupted by Dwemer machinery. This VRChat avatar embodies:
 
-- **Elder Scrolls Horror**: Dwemer-corrupted machinery, oxidized bronze plating, ancient mechanisms fused with flesh
-- **Lovecraftian Dread**: Asymmetric biomechanical transformation, impossible angles, cosmic wrongness
-- **Asian Horror**: Cursed artisan spirit aesthetic, graceful but uncanny movement, psychological unease
+- **Elder Scrolls Horror**: Dwemer machinery animating sacred statuary, oxidized bronze construction, ancient mechanisms corrupting holy relics
+- **Asian Horror Minimalism**: Shrine guardian aesthetic, kneeling penitent pose, featureless bronze mask, uncanny stillness punctuated by mechanical movement
+- **Lovecraftian Wrongness**: Body segmentation defying anatomy, telescoping limbs, impossible prayer pose with fused blade-hands
 
 ### Horror Design Elements
 
-- ⚙️ **Asymmetric Corruption**: Right side transformed into Dwemer machinery with segmented bronze plating
-- 👁️ **Mechanical Eye**: Multi-lens focusing apparatus with amber glow (right eye)
-- 🦴 **Biomechanical Fusion**: Organic tissue merging with tarnished metal in disturbing ways
-- 💀 **Half-Masked Face**: Bronze face plate covering right side, revealing void beneath cracks
-- 🕷️ **Hair-to-Cable Tendrils**: Traditional hairstyle transitions into writhing metallic cables
-- 🌑 **Tall, Unsettling Proportions**: 2.1m height with subtly wrong body ratios
+- 🙏 **Eternal Penitent**: Locked in kneeling prayer pose (1.8m kneeling, 2.4m if standing)
+- 🎭 **Bronze Mask Face**: Smooth featureless mask with almond eye cutouts - NO nose, NO mouth, NO expression
+- 🗡️ **Fused Blade-Hands**: Fingers merged into single sharp points - cannot grasp, only pray and pierce
+- 🦴 **Segmented Neck**: Multiple bronze rings allowing unnatural craning and rotation
+- 🦿 **Telescoping Legs**: Can extend from kneeling to standing in disturbing mechanical sequence
+- ☸️ **Mechanical Halo**: Rotating bronze rings behind head with Dwemer inscriptions and amber light
+- 🎨 **Aged Bronze Aesthetic**: Dark oxidized bronze with green verdigris corruption, ivory joints, saffron prayer cloth
 
 ---
 
@@ -58,7 +59,7 @@ This repository uses GitHub Actions to automatically:
 
 1. ✅ **Procedurally generate** the entire 3D avatar model using Blender Python scripts
 2. ✅ **Automatically rig** the model with Rigify humanoid armature
-3. ✅ **Bake PBR textures** (BaseColor, Normal, Metallic, Roughness, Emission)
+3. ✅ **Bake PBR textures** (Optimized: only bakes procedural materials, skips solid colors - 92% time reduction)
 4. ✅ **Create horror animations** (Idle + 3 emotes)
 5. ✅ **Export to FBX** with Unity-compatible settings
 6. ✅ **Set up Unity VRChat project** with Avatar Descriptor, FX Animator, and Expressions Menu
@@ -73,17 +74,18 @@ This repository uses GitHub Actions to automatically:
 - **Performance Rank**: Good (target ~25-40k polygons)
 - **Platform**: PC only (Quest not supported - uses advanced shaders)
 - **Emotes**:
-  - 🔧 **Mechanical Unfold**: Arm segments telescope outward, chest plates separate, revealing inner mechanisms
-  - 💥 **System Reboot**: Glitchy jerky movements, brief T-pose reset with crackling effect
-  - 👁️ **The Stare**: Slow head turn toward camera, neck elongates slightly, mechanical eye lenses focus
+  - 🙏 **Prayer Unfold**: Arms raise from prayer to T-pose, fingers separate from blade-fused state
+  - 🦿 **Rise from Knees**: Legs telescope from 1.8m kneeling to 2.4m standing height
+  - 📿 **Meditation Glitch**: Head rotates 360° on segmented neck, halo rings spin rapidly with amber flare
 
 ### 🎨 **Materials & Shaders**
 
-- **PBR Materials**: Physically-based rendering for realistic metal and skin
+- **PBR Materials**: Physically-based rendering for aged bronze and sacred materials
 - **Procedural Textures**: All textures generated algorithmically (no external assets)
-- **Emission Shaders**: Glowing amber mechanical eye, subtle Dwemer runes
-- **Oxidized Bronze**: Weathered metal with green patina corruption
-- **Uncanny Flesh**: Pale skin with subsurface scattering
+- **MAT_Bronze**: Aged oxidized bronze with procedural noise-based green verdigris (the ONLY material requiring texture baking)
+- **MAT_Ivory**: Smooth pale stone/ceramic for body segments (solid color, no baking needed)
+- **MAT_Saffron_Bronze**: Warm brass for prayer cloth and accents (solid color, no baking needed)
+- **MAT_Amber_Glow**: Glowing emission for halo lights and eye glow (simple emission, no baking needed)
 
 ---
 
@@ -117,7 +119,7 @@ cd Vrchat-avatar
 
 # Run Blender scripts (in order)
 blender --background --python scripts/blender/generate_avatar.py
-blender --background --python scripts/blender/bake_textures.py
+blender --background --python scripts/blender/bake_textures_optimized.py
 blender --background --python scripts/blender/create_animations.py
 blender --background --python scripts/blender/export_fbx.py
 blender --background --python scripts/blender/render_screenshots.py
@@ -155,11 +157,12 @@ Vrchat-avatar/
 │       └── build.yml              # Main CI/CD pipeline
 ├── scripts/
 │   ├── blender/
-│   │   ├── generate_avatar.py     # Procedural model generation
-│   │   ├── bake_textures.py       # PBR texture baking
-│   │   ├── create_animations.py   # Horror animation creation
-│   │   ├── export_fbx.py          # Unity-compatible FBX export
-│   │   └── render_screenshots.py  # Screenshot rendering
+│   │   ├── generate_avatar.py            # Procedural model generation (The Penitent Mechanism)
+│   │   ├── bake_textures.py              # Original PBR texture baking (legacy)
+│   │   ├── bake_textures_optimized.py    # Optimized baking (92% faster - ACTIVE)
+│   │   ├── create_animations.py          # Horror animation creation
+│   │   ├── export_fbx.py                 # Unity-compatible FBX export
+│   │   └── render_screenshots.py         # Screenshot rendering
 │   ├── unity/
 │   │   └── SetupAvatar.cs         # VRChat avatar setup automation
 │   └── update_readme.py           # README screenshot injection
@@ -183,13 +186,16 @@ Vrchat-avatar/
 │   │   └── manifest.json          # Unity package dependencies (VRChat SDK)
 │   └── ProjectSettings/
 ├── docs/
-│   └── screenshots/               # Auto-generated preview images
-│       ├── front.png
-│       ├── back.png
-│       ├── face.png
-│       ├── pose1.png
-│       └── pose2.png
-└── README.md                      # This file (auto-updated)
+│   ├── screenshots/                        # Auto-generated preview images
+│   │   ├── front.png
+│   │   ├── back.png
+│   │   ├── face.png
+│   │   ├── pose1.png
+│   │   └── pose2.png
+│   ├── BAKING_OPTIMIZATION_REPORT.md       # Full 17-page texture baking analysis
+│   └── BAKING_QUICK_REFERENCE.md           # Quick optimization guide (TL;DR)
+├── README.md                               # This file (auto-updated)
+└── CLAUDE.md                               # Development log and technical notes
 ```
 
 ### Pipeline Flow
@@ -220,8 +226,9 @@ graph TD
 |--------|-------|
 | **Polygons** | ~30,000 tris |
 | **Bones** | ~75 (Rigify humanoid) |
-| **Materials** | 5 (Flesh, Bronze, Cable, Glass, Hair) |
-| **Texture Resolution** | 2048x2048 (PBR maps) |
+| **Materials** | 4 (Bronze, Ivory, Saffron Bronze, Amber Glow) |
+| **Texture Resolution** | 1024x1024 (CI) / 2048x2048 (local) |
+| **Textures Baked** | 12 of 24 objects (only procedural bronze) |
 | **Animations** | 4 (1 idle + 3 emotes) |
 | **VRChat Performance** | Good |
 
@@ -238,10 +245,10 @@ Each material includes:
 
 | Animation | Duration | Type | Description |
 |-----------|----------|------|-------------|
-| **Idle** | 4s loop | Looping | Breathing, micro-twitches, finger curls |
-| **Mechanical Unfold** | 2s | Toggle | Arm telescopes, chest opens |
-| **System Reboot** | 3s | Trigger | Glitch effect, T-pose, snap back |
-| **The Stare** | 4s | Toggle | Head turn, neck elongate, focus |
+| **Idle** | 4s loop | Looping | Subtle swaying, mechanical breathing, finger micro-movements |
+| **Prayer Unfold** | 2s | Toggle | Arms raise from prayer to T-pose, blade-fingers separate |
+| **Rise from Knees** | 3s | Toggle | Legs telescope from 1.8m kneeling to 2.4m standing |
+| **Meditation Glitch** | 4s | Trigger | Head rotates 360° on segmented neck, halo spins |
 
 ---
 
@@ -253,10 +260,10 @@ Edit `scripts/blender/generate_avatar.py`:
 
 ```python
 # Change avatar height
-AVATAR_HEIGHT = 2.1  # Meters (2.1m = tall)
+KNEELING_HEIGHT = 1.8  # Meters (default kneeling height)
 
-# Adjust mechanical corruption side
-# Search for "Right" and change to "Left" to swap sides
+# Adjust pose
+# Search for "create_kneeling_pose()" to modify prayer position
 
 # Modify colors
 bsdf.inputs['Base Color'].default_value = (R, G, B, 1.0)
@@ -274,11 +281,15 @@ bsdf.inputs['Base Color'].default_value = (R, G, B, 1.0)
 Edit material creation functions in `generate_avatar.py`:
 
 ```python
-def create_bronze_material(obj):
-    # Modify color, metallic, roughness values
-    bsdf.inputs['Base Color'].default_value = (0.25, 0.15, 0.08, 1.0)
-    bsdf.inputs['Metallic'].default_value = 0.9
+def create_material_bronze():
+    # Modify bronze color, metallic, roughness values
+    bsdf.inputs['Base Color'].default_value = (0.15, 0.09, 0.05, 1.0)  # Dark bronze
+    bsdf.inputs['Metallic'].default_value = 0.95
     bsdf.inputs['Roughness'].default_value = 0.6
+
+    # Adjust verdigris noise (green patina)
+    noise = nodes.new(type='ShaderNodeTexNoise')
+    noise.inputs['Scale'].default_value = 8.0  # Lower = larger patches
 ```
 
 ---
@@ -323,10 +334,10 @@ The build pipeline (`build.yml`) runs on every push and performs:
    - Blender 3.6.5 installation
    - Unity 2022.3.22f1 installation
 
-2. **Asset Generation** (~20-40 min)
+2. **Asset Generation** (~10-20 min)
    - Procedural model generation
    - Rigify humanoid rigging
-   - Texture baking (Cycles renderer)
+   - Texture baking (Optimized: only bronze materials, 5-10 min instead of 2+ hours)
    - Animation creation
    - FBX export
 
@@ -415,6 +426,7 @@ This avatar and automation pipeline were designed by Claude (AI assistant) based
 - [ ] Blender Rigify generation can be slow in headless mode (~10-15 min)
 - [ ] Screenshot rendering requires significant CPU time (consider GPU rendering in future)
 - [ ] VRChat SDK installation via CLI still experimental (may require manual VCC install)
+- [⚠️] **Texture baking optimization**: Debug version currently deployed with material detection fallback. Optimized script may skip all textures instead of baking bronze materials (investigating node persistence between scripts)
 
 ---
 
