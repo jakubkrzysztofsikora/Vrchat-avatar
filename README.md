@@ -57,15 +57,16 @@
 
 This repository uses GitHub Actions to automatically:
 
-1. ✅ **Procedurally generate** the entire 3D avatar model using Blender Python scripts
-2. ✅ **Automatically rig** the model with Rigify humanoid armature
-3. ✅ **Bake PBR textures** (Optimized: only bakes procedural materials, skips solid colors - 92% time reduction)
-4. ✅ **Create horror animations** (Idle + 3 emotes)
-5. ✅ **Export to FBX** with Unity-compatible settings
-6. ✅ **Set up Unity VRChat project** with Avatar Descriptor, FX Animator, and Expressions Menu
-7. ✅ **Render high-quality screenshots** (5 views)
-8. ✅ **Update this README** with generated screenshots
-9. ✅ **Commit everything back** to the repository
+1. ✅ **Generate base mesh** with proper humanoid topology (V3 architecture)
+2. ✅ **Procedurally assemble** the avatar via kitbashing (mechanical details on base mesh)
+3. ✅ **Automatically rig** the model with Rigify humanoid armature
+4. ✅ **Bake PBR textures** (Optimized: only bakes procedural materials, skips solid colors - 92% time reduction)
+5. ✅ **Create horror animations** (Idle + 3 emotes)
+6. ✅ **Export to FBX** with Unity-compatible settings
+7. ✅ **Set up Unity VRChat project** with Avatar Descriptor, FX Animator, and Expressions Menu
+8. ✅ **Render high-quality screenshots** (5 views)
+9. ✅ **Update this README** with generated screenshots
+10. ✅ **Commit everything back** to the repository
 
 ### 🎮 **VRChat Features**
 
@@ -78,14 +79,18 @@ This repository uses GitHub Actions to automatically:
   - 🦿 **Rise from Knees**: Legs telescope from 1.8m kneeling to 2.4m standing height
   - 📿 **Meditation Glitch**: Head rotates 360° on segmented neck, halo rings spin rapidly with amber flare
 
-### 🎨 **Materials & Shaders**
+### 🎨 **Materials & Shaders (V3 Multi-Layer Procedurals)**
 
-- **PBR Materials**: Physically-based rendering for aged bronze and sacred materials
+- **PBR Materials**: Physically-based rendering with multi-layer procedural complexity
 - **Procedural Textures**: All textures generated algorithmically (no external assets)
-- **MAT_Bronze**: Aged oxidized bronze with procedural noise-based green verdigris (the ONLY material requiring texture baking)
-- **MAT_Ivory**: Smooth pale stone/ceramic for body segments (solid color, no baking needed)
-- **MAT_Saffron_Bronze**: Warm brass for prayer cloth and accents (solid color, no baking needed)
-- **MAT_Amber_Glow**: Glowing emission for halo lights and eye glow (simple emission, no baking needed)
+- **MAT_Bronze_V3**: 3-layer procedural weathered bronze
+  - Layer 1: Base bronze color variation (noise → color ramp)
+  - Layer 2: Verdigris/patina (green oxidation patches)
+  - Layer 3: Dirt and weathering (multiply blend)
+  - Roughness variation (not constant)
+- **MAT_Ivory_V3**: Procedural stone with subtle color shifts and roughness variation
+- **MAT_Saffron_Bronze_V3**: Warm brass with procedural detail and roughness variation
+- **MAT_Amber_Glow_V3**: Enhanced emission with intensity variation
 
 ---
 
@@ -117,12 +122,13 @@ This repository uses GitHub Actions to automatically:
 git clone https://github.com/jakubkrzysztofsikora/Vrchat-avatar.git
 cd Vrchat-avatar
 
-# Run Blender scripts (in order)
-blender --background --python scripts/blender/generate_avatar.py
-blender --background --python scripts/blender/bake_textures_optimized.py
-blender --background --python scripts/blender/create_animations.py
-blender --background --python scripts/blender/export_fbx.py
-blender --background --python scripts/blender/render_screenshots.py
+# Run Blender scripts (in order - V3 Architecture)
+blender --background --python scripts/blender/generate_basemesh.py         # Step 1: Create base mesh
+blender --background --python scripts/blender/generate_avatar_v3.py        # Step 2: Kitbash avatar
+blender --background --python scripts/blender/bake_textures_optimized.py   # Step 3: Bake textures
+blender --background --python scripts/blender/create_animations.py         # Step 4: Create animations
+blender --background --python scripts/blender/export_fbx.py                # Step 5: Export FBX
+blender --background --python scripts/blender/render_screenshots.py        # Step 6: Render screenshots
 
 # Open Unity project
 # Open Project/ in Unity 2022.3.22f1
@@ -157,9 +163,11 @@ Vrchat-avatar/
 │       └── build.yml              # Main CI/CD pipeline
 ├── scripts/
 │   ├── blender/
-│   │   ├── generate_avatar.py            # Procedural model generation (The Penitent Mechanism)
-│   │   ├── bake_textures.py              # Original PBR texture baking (legacy)
+│   │   ├── generate_basemesh.py          # V3: Base mesh generator with proper topology (NEW)
+│   │   ├── generate_avatar_v3.py         # V3: Kitbashing generator with multi-layer materials (ACTIVE)
+│   │   ├── generate_avatar.py            # V2: Primitive stacking (DEPRECATED)
 │   │   ├── bake_textures_optimized.py    # Optimized baking (92% faster - ACTIVE)
+│   │   ├── bake_textures.py              # Original PBR texture baking (legacy)
 │   │   ├── create_animations.py          # Horror animation creation
 │   │   ├── export_fbx.py                 # Unity-compatible FBX export
 │   │   └── render_screenshots.py         # Screenshot rendering
@@ -167,6 +175,8 @@ Vrchat-avatar/
 │   │   └── SetupAvatar.cs         # VRChat avatar setup automation
 │   └── update_readme.py           # README screenshot injection
 ├── Avatar/
+│   ├── BaseMeshes/
+│   │   └── PenitentMechanism_Base.blend  # V3: Reusable humanoid base mesh (generated)
 │   ├── ForgottenArchitect.blend   # Source Blender file (generated)
 │   ├── ForgottenArchitect.fbx     # Unity-ready FBX (generated)
 │   ├── Textures/                  # Baked PBR textures (generated)
@@ -192,6 +202,7 @@ Vrchat-avatar/
 │   │   ├── face.png
 │   │   ├── pose1.png
 │   │   └── pose2.png
+│   ├── V3_ARCHITECTURE_REFACTOR.md         # Complete V2→V3 refactor documentation
 │   ├── BAKING_OPTIMIZATION_REPORT.md       # Full 17-page texture baking analysis
 │   └── BAKING_QUICK_REFERENCE.md           # Quick optimization guide (TL;DR)
 ├── README.md                               # This file (auto-updated)
@@ -204,16 +215,17 @@ Vrchat-avatar/
 graph TD
     A[Push to GitHub] --> B[GitHub Actions Trigger]
     B --> C[Install Blender]
-    C --> D[Generate 3D Model]
-    D --> E[Bake Textures]
-    E --> F[Create Animations]
-    F --> G[Export FBX]
-    G --> H[Render Screenshots]
-    H --> I[Install Unity]
-    I --> J[Setup VRChat Project]
-    J --> K[Update README]
-    K --> L[Commit & Push]
-    L --> M[Upload Artifacts]
+    C --> D[Generate Base Mesh V3]
+    D --> E[Kitbash Avatar V3]
+    E --> F[Bake Textures Optimized]
+    F --> G[Create Animations]
+    G --> H[Export FBX]
+    H --> I[Render Screenshots]
+    I --> J[Install Unity]
+    J --> K[Setup VRChat Project]
+    K --> L[Update README]
+    L --> M[Commit & Push]
+    M --> N[Upload Artifacts]
 ```
 
 ---
@@ -224,7 +236,7 @@ graph TD
 
 | Metric | Value |
 |--------|-------|
-| **Polygons** | ~30,000 tris |
+| **Polygons** | ~20,000-40,000 tris (V3 base mesh + kitbashing) |
 | **Bones** | ~75 (Rigify humanoid) |
 | **Materials** | 4 (Bronze, Ivory, Saffron Bronze, Amber Glow) |
 | **Texture Resolution** | 1024x1024 (CI) / 2048x2048 (local) |
@@ -254,19 +266,27 @@ Each material includes:
 
 ## 🛠️ Customization
 
-### Modifying the Model
+### Modifying the Model (V3 Architecture)
 
-Edit `scripts/blender/generate_avatar.py`:
+Edit `scripts/blender/generate_avatar_v3.py`:
 
 ```python
-# Change avatar height
-KNEELING_HEIGHT = 1.8  # Meters (default kneeling height)
+# Import different base mesh
+BASEMESH_PATH = "Avatar/BaseMeshes/PenitentMechanism_Base.blend"
 
-# Adjust pose
-# Search for "create_kneeling_pose()" to modify prayer position
+# Adjust kitbashing
+# Edit add_shoulder_mechanism(), add_mechanical_halo() functions
 
-# Modify colors
-bsdf.inputs['Base Color'].default_value = (R, G, B, 1.0)
+# Modify multi-layer materials
+def create_material_bronze_v3():
+    # Layer 1: Base color variation
+    noise_base.inputs['Scale'].default_value = 12.0
+
+    # Layer 2: Verdigris intensity
+    mix_verdigris.inputs['Fac'].default_value = 0.3  # Increase for more green
+
+    # Layer 3: Weathering
+    mix_dirt.inputs['Fac'].default_value = 0.4  # Increase for more dirt
 ```
 
 ### Adding New Animations
@@ -276,20 +296,27 @@ bsdf.inputs['Base Color'].default_value = (R, G, B, 1.0)
 3. Call it in `main()`
 4. Update `scripts/unity/SetupAvatar.cs` to add parameter and transition
 
-### Changing Materials
+### Changing Materials (V3 Multi-Layer)
 
-Edit material creation functions in `generate_avatar.py`:
+Edit material creation functions in `generate_avatar_v3.py`:
 
 ```python
-def create_material_bronze():
-    # Modify bronze color, metallic, roughness values
-    bsdf.inputs['Base Color'].default_value = (0.15, 0.09, 0.05, 1.0)  # Dark bronze
-    bsdf.inputs['Metallic'].default_value = 0.95
-    bsdf.inputs['Roughness'].default_value = 0.6
+def create_material_bronze_v3():
+    # Layer 1: Base bronze color
+    ramp_base.color_ramp.elements[0].color = (0.12, 0.08, 0.05, 1.0)  # Dark bronze
+    ramp_base.color_ramp.elements[1].color = (0.22, 0.16, 0.09, 1.0)  # Light bronze
 
-    # Adjust verdigris noise (green patina)
-    noise = nodes.new(type='ShaderNodeTexNoise')
-    noise.inputs['Scale'].default_value = 8.0  # Lower = larger patches
+    # Layer 2: Verdigris (green oxidation)
+    ramp_verdigris.color_ramp.elements[1].color = (0.1, 0.3, 0.2, 1)  # Green patina
+    mix_verdigris.inputs['Fac'].default_value = 0.3  # Patina intensity
+
+    # Layer 3: Dirt
+    ramp_dirt.color_ramp.elements[1].color = (0.05, 0.04, 0.03, 1)  # Dirt color
+    mix_dirt.inputs['Fac'].default_value = 0.4  # Dirt intensity
+
+    # Roughness variation
+    map_range_rough.inputs['To Min'].default_value = 0.45  # Minimum roughness
+    map_range_rough.inputs['To Max'].default_value = 0.75  # Maximum roughness
 ```
 
 ---
@@ -334,10 +361,11 @@ The build pipeline (`build.yml`) runs on every push and performs:
    - Blender 3.6.5 installation
    - Unity 2022.3.22f1 installation
 
-2. **Asset Generation** (~10-20 min)
-   - Procedural model generation
+2. **Asset Generation** (~15-25 min)
+   - Base mesh generation (V3: proper humanoid topology)
+   - Avatar kitbashing (V3: mechanical details + multi-layer materials)
    - Rigify humanoid rigging
-   - Texture baking (Optimized: only bronze materials, 5-10 min instead of 2+ hours)
+   - Texture baking (Optimized: only procedural materials, 5-10 min instead of 2+ hours)
    - Animation creation
    - FBX export
 
@@ -426,14 +454,24 @@ This avatar and automation pipeline were designed by Claude (AI assistant) based
 - [ ] Blender Rigify generation can be slow in headless mode (~10-15 min)
 - [ ] Screenshot rendering requires significant CPU time (consider GPU rendering in future)
 - [ ] VRChat SDK installation via CLI still experimental (may require manual VCC install)
-- [⚠️] **Texture baking optimization**: Debug version currently deployed with material detection fallback. Optimized script may skip all textures instead of baking bronze materials (investigating node persistence between scripts)
+- [✅] **V3 Architecture Refactor**: Complete redesign from primitive stacking (V2) to base mesh + kitbashing (V3) with multi-layer procedural materials
+- [⚠️] **Texture baking optimization**: Fixed node detection bug (now uses node.type strings instead of class names)
 
 ---
 
 ## 🗺️ Roadmap
 
-### Future Enhancements
+### V3.0.0 Completed (2025-11-17)
+- [✅] **Base Mesh Architecture**: Proper humanoid topology instead of primitive stacking
+- [✅] **Multi-Layer Procedural Materials**: 3+ layer materials for realistic weathering
+- [✅] **Geometric Detail Helpers**: Panel lines, bolts, surface weathering
+- [✅] **Kitbashing System**: Use primitives for mechanical details only
 
+### Future Enhancements (V4+)
+
+- [ ] **Geometry Nodes**: Use GN modifiers for panel lines and greebles
+- [ ] **Sculpted Base Mesh**: Replace procedural base with hand-sculpted mesh
+- [ ] **Normal Map Baking**: High-poly to low-poly workflow
 - [ ] **Quest Compatibility**: Mobile-optimized version with simplified shaders
 - [ ] **Gesture Animations**: Finger pose-triggered horror effects
 - [ ] **Audio Integration**: Mechanical grinding sounds, breathing ambiance

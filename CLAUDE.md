@@ -44,17 +44,35 @@ Create a **fully automated VRChat avatar generation pipeline** that:
 
 ### Pipeline Stages
 
-#### 1. **Blender Python Scripts** (Procedural Generation)
+#### 1. **Blender Python Scripts** (V3 Architecture - Base Mesh + Kitbashing)
 
-**`generate_avatar.py`** (1204 lines - completely redesigned)
-- Creates kneeling statue body using geometric primitives
-- Generates segmented neck with bronze rings
-- Builds featureless bronze mask head (NO nose, NO mouth)
-- Creates fused blade-hands (fingers merged to points)
-- Constructs telescoping legs with joint segments
-- Builds mechanical halo (rotating bronze rings)
-- Applies 4 materials: MAT_Bronze (procedural verdigris), MAT_Ivory (solid), MAT_Saffron_Bronze (solid), MAT_Amber_Glow (emission)
+**`generate_basemesh.py`** (280 lines - NEW in V3)
+- Creates proper humanoid base mesh with quad topology
+- Kneeling pose baked into geometry
+- Proper edge loops at joints for deformation
+- Subdivision-ready (modifiers left unapplied)
+- Outputs: `Avatar/BaseMeshes/PenitentMechanism_Base.blend`
+
+**`generate_avatar_v3.py`** (600+ lines - V3 ACTIVE)
+- Imports base mesh from .blend file
+- Adds mechanical corruption via kitbashing (shoulder gears, plates, pistons)
+- Creates mechanical halo (rotating bronze rings)
+- Replaces hand stubs with blade-hands
+- Applies V3 multi-layer procedural materials:
+  - **MAT_Bronze_V3**: 3-layer (base color + verdigris + dirt) + roughness variation
+  - **MAT_Ivory_V3**: Procedural stone with color/roughness variation
+  - **MAT_Saffron_Bronze_V3**: Warm brass with procedural detail
+  - **MAT_Amber_Glow_V3**: Enhanced emission
+- Adds geometric detail helpers:
+  - `add_panel_lines()`: Beveled edges for panel separation
+  - `add_bolts_to_object()`: Scattered rivet details
+  - `add_surface_weathering()`: Displacement for wear
 - Generates Rigify meta-rig for humanoid armature
+
+**`generate_avatar.py`** (1204 lines - V2 DEPRECATED)
+- Old approach: builds body from primitive stacking (cubes, spheres, cylinders)
+- **Problem**: Results in "snowman" appearance - disconnected primitives, poor topology
+- **Replaced by**: V3 architecture (base mesh + kitbashing)
 
 **`bake_textures.py`** (284 lines - legacy, fixed)
 - Fixed "No active image found" error
@@ -63,15 +81,15 @@ Create a **fully automated VRChat avatar generation pipeline** that:
 - Outputs 2048x2048 PNG textures (96 textures total)
 - TIME: 2+ hours (exceeds GitHub Actions timeout)
 
-**`bake_textures_optimized.py`** (438 lines - NEW, 92% faster)
+**`bake_textures_optimized.py`** (438 lines - V2/V3, 92% faster)
 - Analyzes material complexity to detect procedural nodes
-- **Skips baking solid-color materials** (MAT_Ivory, MAT_Saffron_Bronze, MAT_Amber_Glow)
-- **Only bakes MAT_Bronze** (has ShaderNodeTexNoise for verdigris)
+- **Skips baking solid-color materials** (materials without procedural nodes)
+- **Only bakes procedural materials** (V3 bronze materials with multi-layer noise)
 - Adaptive sampling: 1-16 samples instead of 128
 - CI-optimized resolution: 1024x1024 (vs 2048x2048 locally)
 - Outputs 12 textures instead of 96
 - TIME: 5-10 minutes (92% reduction)
-- **CURRENT STATUS**: Debug version deployed with fallback force-baking for materials with "Bronze" in name (investigating node detection issue)
+- **FIXED**: Node detection bug (now uses node.type strings: 'TEX_NOISE', not class names: 'ShaderNodeTexNoise')
 
 **`create_animations.py`**
 - Idle: Subtle swaying, mechanical breathing, finger micro-movements
@@ -102,11 +120,16 @@ Create a **fully automated VRChat avatar generation pipeline** that:
 
 #### 3. **GitHub Actions Workflow**
 
-**`build.yml`**
+**`build.yml`** (Updated for V3)
 - Installs Blender 3.6.5 (cached)
 - Installs Unity 2022.3.22f1 (cached)
-- Runs all Blender scripts sequentially
-  - **Uses `bake_textures_optimized.py` instead of `bake_textures.py`**
+- Runs all Blender scripts sequentially:
+  1. **`generate_basemesh.py`** - Creates reusable humanoid base mesh (V3)
+  2. **`generate_avatar_v3.py`** - Imports base + kitbashes avatar (V3)
+  3. **`bake_textures_optimized.py`** - Optimized texture baking
+  4. **`create_animations.py`** - Horror animations
+  5. **`export_fbx.py`** - Unity export
+  6. **`render_screenshots.py`** - Preview renders
 - Copies FBX to Unity project
 - Runs Unity headless setup
 - Updates README with screenshots
@@ -126,19 +149,23 @@ Create a **fully automated VRChat avatar generation pipeline** that:
 
 ```
 Vrchat-avatar/
-├── .github/workflows/build.yml           ← CI/CD pipeline
+├── .github/workflows/build.yml           ← CI/CD pipeline (updated for V3)
 ├── scripts/
 │   ├── blender/
-│   │   ├── generate_avatar.py            ← Procedural model generation (The Penitent Mechanism)
-│   │   ├── generate_avatar_backup.py     ← Backup of original design (The Forgotten Architect)
-│   │   ├── bake_textures.py              ← Original texture baking (legacy)
+│   │   ├── generate_basemesh.py          ← V3: Base mesh generator (NEW)
+│   │   ├── generate_avatar_v3.py         ← V3: Kitbashing generator (ACTIVE)
+│   │   ├── generate_avatar.py            ← V2: Primitive stacking (DEPRECATED)
+│   │   ├── generate_avatar_backup.py     ← V1: Original design backup
 │   │   ├── bake_textures_optimized.py    ← Optimized texture baking (ACTIVE)
-│   │   ├── create_animations.py          ← Horror animation creation
+│   │   ├── bake_textures.py              ← Original texture baking (legacy)
+│   │   ├── create_animations.py          ← Horror animation creation (updated for V3)
 │   │   ├── export_fbx.py                 ← Unity-compatible FBX export
-│   │   └── render_screenshots.py         ← Screenshot rendering
+│   │   └── render_screenshots.py         ← Screenshot rendering (fixed)
 │   ├── unity/SetupAvatar.cs              ← Unity automation
 │   └── update_readme.py                  ← README screenshot injection
 ├── Avatar/                               ← Generated assets
+│   ├── BaseMeshes/
+│   │   └── PenitentMechanism_Base.blend  ← V3: Reusable humanoid base (NEW)
 │   ├── ForgottenArchitect.blend
 │   ├── ForgottenArchitect.fbx
 │   ├── Textures/                         ← 12 textures (optimized) instead of 96
@@ -149,6 +176,7 @@ Vrchat-avatar/
 │   └── ProjectSettings/
 ├── docs/
 │   ├── screenshots/                      ← Auto-generated previews
+│   ├── V3_ARCHITECTURE_REFACTOR.md       ← Complete V2→V3 refactor docs (NEW)
 │   ├── BAKING_OPTIMIZATION_REPORT.md     ← Full 17-page analysis
 │   └── BAKING_QUICK_REFERENCE.md         ← TL;DR optimization guide
 ├── README.md                             ← Auto-updated documentation
@@ -517,6 +545,39 @@ This project demonstrates:
 
 ## 📝 Change Log
 
+### Version 3.0.0 (2025-11-17)
+
+**Complete Architecture Refactor - V2 → V3 (Base Mesh + Kitbashing)**
+
+**Problem Identified:**
+V1 and V2 used pure procedural generation (stacking primitives via Python), which resulted in a "snowman" appearance - disconnected shapes instead of a cohesive character.
+
+**Solution Implemented:**
+V3 uses a proper base mesh with good topology as the foundation, then adds mechanical details via kitbashing. This is how professional 3D character pipelines actually work.
+
+**Changes:**
+- ✅ **Created `generate_basemesh.py`**: Generates reusable humanoid base mesh with proper quad topology, edge loops, and subdivision-ready geometry
+- ✅ **Created `generate_avatar_v3.py`**: Complete refactor - imports base mesh, adds mechanical corruption via kitbashing
+- ✅ **Multi-layer procedural materials**: 3+ layer materials for realistic weathering
+  - **MAT_Bronze_V3**: Base color variation + verdigris (green oxidation) + dirt/weathering + roughness variation
+  - **MAT_Ivory_V3**: Procedural stone with color and roughness variation
+  - **MAT_Saffron_Bronze_V3**: Warm brass with procedural detail
+  - **MAT_Amber_Glow_V3**: Enhanced emission with intensity variation
+- ✅ **Geometric detail helpers**:
+  - `add_panel_lines()`: Beveled edges for panel separation
+  - `add_bolts_to_object()`: Scattered rivet details
+  - `add_surface_weathering()`: Displacement modifier for wear
+- ✅ **Kitbashing system**: Use primitives ONLY for mechanical parts (gears, plates, pistons), NOT anatomy
+- ✅ **Updated workflow**: Base mesh generation → Avatar kitbashing → Texture baking → Animation → Export
+- ✅ **Fixed texture baking bug**: Node detection now uses `node.type` strings ('TEX_NOISE') instead of class names ('ShaderNodeTexNoise')
+- ✅ **Fixed animation script**: Rewrote animations for "Penitent Mechanism" (PrayerUnfold, RiseFromKnees, MeditationGlitch)
+- ✅ **Fixed screenshot rendering**: Added missing `get_avatar_bounds()` function
+- ✅ **Comprehensive documentation**: Added `V3_ARCHITECTURE_REFACTOR.md` (17-page technical document)
+- ✅ **Updated README.md and CLAUDE.md**: Reflect V3 architecture throughout
+
+**Expected Result:**
+Character-like appearance instead of snowman/mannequin, while maintaining VRChat "Good" performance rank (~20-40k tris).
+
 ### Version 2.0.0 (2025-11-17)
 
 **Complete Avatar Redesign + Texture Baking Optimization**
@@ -529,7 +590,7 @@ This project demonstrates:
 - ✅ **92% performance improvement**: 2+ hours → 5-10 minutes
 - ✅ **Comprehensive documentation**: Added `BAKING_OPTIMIZATION_REPORT.md` and `BAKING_QUICK_REFERENCE.md`
 - ✅ **Updated animations**: Prayer Unfold, Rise from Knees, Meditation Glitch
-- 🐛 **Known issue**: Debugging material node detection (fallback force-baking deployed)
+- 🐛 **Known issue**: Material node detection bug (fixed in V3.0.0)
 
 ### Version 1.0.0 (2025-11-16)
 
@@ -575,6 +636,6 @@ For questions, issues, or collaboration:
 
 Claude (Anthropic) + User Requirements = Fully Automated VRChat Avatar Pipeline
 
-**Version 2.0**: Complete redesign + 92% texture baking optimization
+**Version 3.0**: Complete architecture refactor (base mesh + kitbashing) + multi-layer materials
 
 </div>

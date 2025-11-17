@@ -59,17 +59,40 @@ jobs:
           /opt/blender/blender --version
 
       #########################################
-      # STEP 3: Generate 3D Model
+      # STEP 3a: Generate Base Mesh (V3 Architecture)
+      #########################################
+      - name: Generate Base Mesh
+        run: |
+          echo "Generating base mesh for The Penitent Mechanism (V3 Architecture)..."
+
+          # Ensure base mesh directory exists
+          mkdir -p Avatar/BaseMeshes
+
+          # Generate base mesh first
+          /opt/blender/blender --background --enable-autoexec --python scripts/blender/generate_basemesh.py 2>&1 | tee blender_basemesh.log
+
+          # Check if base mesh was created
+          if [ ! -f "Avatar/BaseMeshes/PenitentMechanism_Base.blend" ]; then
+            echo "ERROR: Base mesh generation failed!"
+            cat blender_basemesh.log
+            exit 1
+          fi
+
+          echo "Base mesh generated successfully!"
+          ls -lh Avatar/BaseMeshes/
+
+      #########################################
+      # STEP 3b: Generate Avatar Model (V3 - Kitbashing)
       #########################################
       - name: Generate Avatar Model
         run: |
-          echo "Generating The Forgotten Architect avatar..."
+          echo "Generating The Penitent Mechanism avatar (V3 - Base Mesh + Kitbashing)..."
 
           # Ensure output directories exist
           mkdir -p Avatar/Textures Avatar/Animations Avatar/Materials Avatar/Prefabs
 
-          # Run Blender with autoexec enabled for addons like Rigify
-          /opt/blender/blender --background --enable-autoexec --python scripts/blender/generate_avatar.py 2>&1 | tee blender_generate.log
+          # Run V3 generator (imports base mesh, adds mechanical details)
+          /opt/blender/blender --background --enable-autoexec --python scripts/blender/generate_avatar_v3.py 2>&1 | tee blender_generate.log
 
           # Check if blend file was created
           if [ ! -f "Avatar/ForgottenArchitect.blend" ]; then
@@ -78,7 +101,7 @@ jobs:
             exit 1
           fi
 
-          echo "Avatar model generated successfully!"
+          echo "Avatar model generated successfully (V3)!"
 
       #########################################
       # STEP 4: Bake Textures (Optimized)
