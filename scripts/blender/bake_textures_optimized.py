@@ -43,6 +43,10 @@ def material_complexity_analysis(material):
 
     nodes = material.node_tree.nodes
 
+    # Debug: Print all node types found
+    node_types = [node.type for node in nodes]
+    print(f"    DEBUG: Material '{material.name}' has nodes: {node_types}")
+
     # Check for procedural texture nodes
     procedural_nodes = {
         'ShaderNodeTexNoise': 1,
@@ -57,13 +61,18 @@ def material_complexity_analysis(material):
     for node in nodes:
         if node.type in procedural_nodes:
             complexity = max(complexity, procedural_nodes[node.type])
+            print(f"    DEBUG: Found procedural node {node.type}, complexity now {complexity}")
 
     # Check for color ramps, mix nodes (add complexity)
-    if any(n.type in ['ShaderNodeValToRGB', 'ShaderNodeMixRGB'] for n in nodes):
+    mix_nodes_found = [n.type for n in nodes if n.type in ['ShaderNodeValToRGB', 'ShaderNodeMixRGB']]
+    if mix_nodes_found:
         complexity = max(complexity, 1)
+        print(f"    DEBUG: Found mix/ramp nodes: {mix_nodes_found}, complexity now {complexity}")
 
     # Solid colors (Principled BSDF with constant inputs) = no baking needed
     needs_baking = complexity > 0
+
+    print(f"    DEBUG: Final complexity={complexity}, needs_baking={needs_baking}")
 
     return complexity, needs_baking
 
