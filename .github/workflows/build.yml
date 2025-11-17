@@ -81,12 +81,12 @@ jobs:
           echo "Avatar model generated successfully!"
 
       #########################################
-      # STEP 4: Bake Textures
+      # STEP 4: Bake Textures (Optimized)
       #########################################
-      - name: Bake PBR Textures
+      - name: Bake PBR Textures (Optimized)
         run: |
-          echo "Baking textures..."
-          /opt/blender/blender --background --enable-autoexec --python scripts/blender/bake_textures.py 2>&1 | tee blender_bake.log
+          echo "Baking textures (optimized - skips solid colors, only bakes procedural materials)..."
+          /opt/blender/blender --background --enable-autoexec --python scripts/blender/bake_textures_optimized.py 2>&1 | tee blender_bake.log
 
           echo "Texture baking complete!"
 
