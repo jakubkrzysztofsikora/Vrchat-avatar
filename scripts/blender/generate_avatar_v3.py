@@ -631,7 +631,9 @@ def main():
         rig = generate_rigify_rig(metarig)
 
         if rig:
-            mesh_objects = [obj for obj in bpy.data.objects if obj.type == 'MESH']
+            # Collect mesh objects (exclude Rigify widget objects)
+            mesh_objects = [obj for obj in bpy.data.objects
+                          if obj.type == 'MESH' and not obj.name.startswith('WGT-')]
             apply_automatic_weights(mesh_objects, rig)
         print()
 
@@ -640,9 +642,12 @@ def main():
         print("SCENE STATISTICS")
         print("=" * 60)
 
-        total_verts = sum(len(obj.data.vertices) for obj in bpy.data.objects if obj.type == 'MESH')
-        total_faces = sum(len(obj.data.polygons) for obj in bpy.data.objects if obj.type == 'MESH')
-        mesh_count = len([obj for obj in bpy.data.objects if obj.type == 'MESH'])
+        # Statistics (exclude Rigify widgets)
+        mesh_objects = [obj for obj in bpy.data.objects
+                       if obj.type == 'MESH' and not obj.name.startswith('WGT-')]
+        total_verts = sum(len(obj.data.vertices) for obj in mesh_objects)
+        total_faces = sum(len(obj.data.polygons) for obj in mesh_objects)
+        mesh_count = len(mesh_objects)
 
         print(f"  Total vertices: {total_verts}")
         print(f"  Total faces: {total_faces}")
