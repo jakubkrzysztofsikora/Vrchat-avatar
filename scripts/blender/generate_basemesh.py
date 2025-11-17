@@ -36,10 +36,12 @@ def create_torso_base():
 
     # Enter edit mode and add subdivision
     bpy.ops.object.mode_set(mode='EDIT')
-    bpy.ops.mesh.subdivide(number_cuts=3)
+    bpy.ops.mesh.select_all(action='SELECT')
 
-    # Add edge loops for chest/waist definition
-    bpy.ops.mesh.loopcut_slide(MESH_OT_loopcut={"number_cuts": 2})
+    # Subdivide multiple times to create edge loops
+    # This replaces loopcut_slide which doesn't work in headless mode
+    bpy.ops.mesh.subdivide(number_cuts=1)  # First subdivision
+    bpy.ops.mesh.subdivide(number_cuts=1)  # Second subdivision for more topology
 
     bpy.ops.object.mode_set(mode='OBJECT')
 
