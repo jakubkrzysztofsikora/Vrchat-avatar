@@ -1,11 +1,11 @@
 #!/usr/bin/env python3
 """
-Animation Creation Script for The Forgotten Architect
+Animation Creation Script for The Penitent Mechanism
 Creates horror-themed animations:
-- Idle (breathing with mechanical sounds)
-- Emote 1: Mechanical Unfold (parts telescope outward)
-- Emote 2: System Reboot (glitchy reset)
-- Emote 3: The Stare (uncanny face focus)
+- Idle (subtle swaying, mechanical breathing)
+- Emote 1: Prayer Unfold (arms raise from prayer to T-pose, blade-fingers separate)
+- Emote 2: Rise from Knees (legs telescope from kneeling to standing)
+- Emote 3: Meditation Glitch (head rotates 360° on segmented neck, halo spins)
 """
 
 import bpy
@@ -21,11 +21,10 @@ def clear_animation(obj):
 
 def create_idle_animation(rig):
     """
-    Create unsettling idle animation:
-    - Slow breathing (chest expansion)
-    - Mechanical parts subtle grinding
-    - Head micro-twitches
-    - Fingers slow curl/uncurl
+    Create unsettling idle animation for kneeling statue:
+    - Slow mechanical breathing (chest expansion)
+    - Subtle swaying (barely perceptible)
+    - Finger micro-movements on fused blade-hands
     """
     print("Creating idle animation...")
 
@@ -42,41 +41,34 @@ def create_idle_animation(rig):
     bpy.context.view_layer.objects.active = rig
     bpy.ops.object.mode_set(mode='POSE')
 
-    # Breathing - chest bone
+    # Mechanical breathing - chest bone
     if 'spine.003' in rig.pose.bones or 'chest' in rig.pose.bones:
         chest_bone = rig.pose.bones.get('spine.003') or rig.pose.bones.get('chest')
 
-        # Keyframe breathing cycle
+        # Keyframe breathing cycle (slower, more mechanical)
         for frame in [1, 60, 120]:
             bpy.context.scene.frame_set(frame)
-            scale_factor = 1.0 if frame == 60 else 1.02
+            scale_factor = 1.0 if frame == 60 else 1.015  # Subtler breathing
             chest_bone.scale = (scale_factor, scale_factor, scale_factor)
             chest_bone.keyframe_insert(data_path="scale", frame=frame)
 
-    # Head micro-twitches
-    if 'head' in rig.pose.bones:
-        head_bone = rig.pose.bones['head']
+    # Subtle swaying (kneeling statue barely moves)
+    if 'spine' in rig.pose.bones:
+        spine_bone = rig.pose.bones['spine']
 
-        twitch_frames = [30, 31, 75, 76]
-        for frame in twitch_frames:
-            bpy.context.scene.frame_set(frame)
-            angle = 0.05 if frame % 2 == 0 else -0.03
-            head_bone.rotation_euler[2] = angle  # Z-axis rotation
-            head_bone.keyframe_insert(data_path="rotation_euler", frame=frame)
-
-        # Return to neutral
-        for frame in [1, 40, 90, 120]:
-            bpy.context.scene.frame_set(frame)
-            head_bone.rotation_euler = (0, 0, 0)
-            head_bone.keyframe_insert(data_path="rotation_euler", frame=frame)
-
-    # Finger curl (right hand - mechanical side)
-    finger_bones = [b for b in rig.pose.bones if 'finger' in b.name.lower() and 'r' in b.name.lower()]
-    for bone in finger_bones[:3]:  # Just a few fingers
         for frame in [1, 60, 120]:
             bpy.context.scene.frame_set(frame)
-            curl = 0.2 if frame == 60 else 0.0
-            bone.rotation_euler[0] = curl
+            sway_angle = 0.01 if frame == 60 else 0.0  # Tiny sway
+            spine_bone.rotation_euler[0] = sway_angle  # X-axis sway
+            spine_bone.keyframe_insert(data_path="rotation_euler", frame=frame)
+
+    # Finger micro-movements (blade-hands twitch)
+    finger_bones = [b for b in rig.pose.bones if 'finger' in b.name.lower()]
+    for bone in finger_bones[:2]:  # Just a few fingers
+        for frame in [1, 60, 120]:
+            bpy.context.scene.frame_set(frame)
+            twitch = 0.05 if frame == 60 else 0.0
+            bone.rotation_euler[0] = twitch
             bone.keyframe_insert(data_path="rotation_euler", frame=frame)
 
     bpy.ops.object.mode_set(mode='OBJECT')
@@ -84,151 +76,206 @@ def create_idle_animation(rig):
     # Export animation
     export_animation(action, "Idle")
 
-def create_mechanical_unfold_animation(rig):
+def create_prayer_unfold_animation(rig):
     """
-    Emote: Mechanical parts telescope outward revealing inner mechanisms
+    Emote: Arms raise from prayer position to T-pose, blade-fingers separate slightly
     """
-    print("Creating mechanical unfold animation...")
+    print("Creating prayer unfold animation...")
 
-    action = bpy.data.actions.new(name="MechanicalUnfold")
+    action = bpy.data.actions.new(name="PrayerUnfold")
     rig.animation_data.action = action
 
     bpy.context.scene.frame_start = 1
-    bpy.context.scene.frame_end = 60
+    bpy.context.scene.frame_end = 60  # 2 seconds
 
     bpy.ops.object.mode_set(mode='POSE')
 
-    # Right arm extends unnaturally
-    if 'upper_arm.R' in rig.pose.bones:
-        arm_bone = rig.pose.bones['upper_arm.R']
+    # Both arms raise from prayer (hands at chest) to T-pose (arms out to sides)
+    for side in ['L', 'R']:
+        # Upper arm
+        if f'upper_arm.{side}' in rig.pose.bones:
+            arm_bone = rig.pose.bones[f'upper_arm.{side}']
 
-        # Start pose
-        bpy.context.scene.frame_set(1)
-        arm_bone.rotation_euler = (0, 0, 0)
-        arm_bone.scale = (1, 1, 1)
-        arm_bone.keyframe_insert(data_path="rotation_euler", frame=1)
-        arm_bone.keyframe_insert(data_path="scale", frame=1)
+            # Start in prayer position (arms at chest, rotated inward)
+            bpy.context.scene.frame_set(1)
+            if side == 'L':
+                arm_bone.rotation_euler = (0, 0, 0.5)  # Arms inward
+            else:
+                arm_bone.rotation_euler = (0, 0, -0.5)
+            arm_bone.keyframe_insert(data_path="rotation_euler", frame=1)
 
-        # Extended pose
-        bpy.context.scene.frame_set(30)
-        arm_bone.rotation_euler = (0, 0, -1.5)  # Extend outward
-        arm_bone.scale = (1, 1.3, 1)  # Elongate
-        arm_bone.keyframe_insert(data_path="rotation_euler", frame=30)
-        arm_bone.keyframe_insert(data_path="scale", frame=30)
+            # Mid-raise
+            bpy.context.scene.frame_set(30)
+            if side == 'L':
+                arm_bone.rotation_euler = (0, 0, 0.785)  # 45 degrees out
+            else:
+                arm_bone.rotation_euler = (0, 0, -0.785)
+            arm_bone.keyframe_insert(data_path="rotation_euler", frame=30)
 
-        # Return
-        bpy.context.scene.frame_set(60)
-        arm_bone.rotation_euler = (0, 0, 0)
-        arm_bone.scale = (1, 1, 1)
-        arm_bone.keyframe_insert(data_path="rotation_euler", frame=60)
-        arm_bone.keyframe_insert(data_path="scale", frame=60)
+            # T-pose (arms fully extended to sides)
+            bpy.context.scene.frame_set(60)
+            if side == 'L':
+                arm_bone.rotation_euler = (0, 0, 1.57)  # 90 degrees (T-pose)
+            else:
+                arm_bone.rotation_euler = (0, 0, -1.57)
+            arm_bone.keyframe_insert(data_path="rotation_euler", frame=60)
 
-    # Chest plates separate
-    if 'spine.003' in rig.pose.bones:
-        chest = rig.pose.bones['spine.003']
+        # Forearm extends
+        if f'forearm.{side}' in rig.pose.bones:
+            forearm = rig.pose.bones[f'forearm.{side}']
 
-        for frame, scale in [(1, 1.0), (30, 1.15), (60, 1.0)]:
+            for frame, angle in [(1, -1.0), (30, -0.5), (60, 0.0)]:
+                bpy.context.scene.frame_set(frame)
+                forearm.rotation_euler = (0, angle, 0)
+                forearm.keyframe_insert(data_path="rotation_euler", frame=frame)
+
+    # Blade-fingers separate slightly (opening gesture)
+    finger_bones = [b for b in rig.pose.bones if 'finger' in b.name.lower()]
+    for bone in finger_bones:
+        for frame, spread in [(1, 0.0), (60, 0.1)]:
             bpy.context.scene.frame_set(frame)
-            chest.scale = (scale, scale, 1.0)
-            chest.keyframe_insert(data_path="scale", frame=frame)
-
-    bpy.ops.object.mode_set(mode='OBJECT')
-    export_animation(action, "MechanicalUnfold")
-
-def create_system_reboot_animation(rig):
-    """
-    Emote: Glitchy system reboot - jerky movements, reset to T-pose briefly
-    """
-    print("Creating system reboot animation...")
-
-    action = bpy.data.actions.new(name="SystemReboot")
-    rig.animation_data.action = action
-
-    bpy.context.scene.frame_start = 1
-    bpy.context.scene.frame_end = 90
-
-    bpy.ops.object.mode_set(mode='POSE')
-
-    # Get all pose bones
-    all_bones = list(rig.pose.bones)
-
-    # Glitch phase (frames 1-30)
-    for frame in range(1, 30, 3):
-        bpy.context.scene.frame_set(frame)
-        for bone in all_bones[:10]:  # Just affect some bones
-            bone.rotation_euler = (
-                (hash(bone.name + str(frame)) % 100) / 1000.0,
-                (hash(bone.name + str(frame + 1)) % 100) / 1000.0,
-                (hash(bone.name + str(frame + 2)) % 100) / 1000.0
-            )
+            bone.rotation_euler[2] = spread  # Slight spreading
             bone.keyframe_insert(data_path="rotation_euler", frame=frame)
 
-    # T-pose reset (frame 45)
-    bpy.context.scene.frame_set(45)
-    for bone in all_bones:
-        bone.rotation_euler = (0, 0, 0)
-        bone.scale = (1, 1, 1)
-        bone.keyframe_insert(data_path="rotation_euler", frame=45)
-        bone.keyframe_insert(data_path="scale", frame=45)
-
-    # Return to rest (frame 90)
-    bpy.context.scene.frame_set(90)
-    for bone in all_bones:
-        bone.rotation_euler = (0, 0, 0)
-        bone.keyframe_insert(data_path="rotation_euler", frame=90)
-
     bpy.ops.object.mode_set(mode='OBJECT')
-    export_animation(action, "SystemReboot")
+    export_animation(action, "PrayerUnfold")
 
-def create_the_stare_animation(rig):
+def create_rise_from_knees_animation(rig):
     """
-    Emote: Head slowly turns to camera, mechanical eye lenses focus
+    Emote: Legs telescope from kneeling (1.8m) to standing (2.4m) height
     """
-    print("Creating 'The Stare' animation...")
+    print("Creating rise from knees animation...")
 
-    action = bpy.data.actions.new(name="TheStare")
+    action = bpy.data.actions.new(name="RiseFromKnees")
     rig.animation_data.action = action
 
     bpy.context.scene.frame_start = 1
-    bpy.context.scene.frame_end = 120
+    bpy.context.scene.frame_end = 90  # 3 seconds
 
     bpy.ops.object.mode_set(mode='POSE')
 
-    # Head turn
+    # Pelvis rises (main height change)
+    if 'spine' in rig.pose.bones:
+        pelvis = rig.pose.bones['spine']
+
+        # Start kneeling
+        bpy.context.scene.frame_set(1)
+        pelvis.location = (0, 0, 0)
+        pelvis.keyframe_insert(data_path="location", frame=1)
+
+        # Rising
+        bpy.context.scene.frame_set(45)
+        pelvis.location = (0, 0, 0.3)  # Rising
+        pelvis.keyframe_insert(data_path="location", frame=45)
+
+        # Fully standing (60cm higher)
+        bpy.context.scene.frame_set(90)
+        pelvis.location = (0, 0, 0.6)
+        pelvis.keyframe_insert(data_path="location", frame=90)
+
+    # Thighs extend (legs telescope)
+    for side in ['L', 'R']:
+        if f'thigh.{side}' in rig.pose.bones:
+            thigh = rig.pose.bones[f'thigh.{side}']
+
+            # Start bent (kneeling)
+            bpy.context.scene.frame_set(1)
+            thigh.rotation_euler = (-1.57, 0, 0)  # 90 degrees bent
+            thigh.scale = (1, 1, 1)
+            thigh.keyframe_insert(data_path="rotation_euler", frame=1)
+            thigh.keyframe_insert(data_path="scale", frame=1)
+
+            # Extending
+            bpy.context.scene.frame_set(45)
+            thigh.rotation_euler = (-0.785, 0, 0)  # 45 degrees
+            thigh.scale = (1, 1, 1.2)  # Telescoping
+            thigh.keyframe_insert(data_path="rotation_euler", frame=45)
+            thigh.keyframe_insert(data_path="scale", frame=45)
+
+            # Fully extended (standing)
+            bpy.context.scene.frame_set(90)
+            thigh.rotation_euler = (0, 0, 0)  # Straight
+            thigh.scale = (1, 1, 1.4)  # Fully telescoped
+            thigh.keyframe_insert(data_path="rotation_euler", frame=90)
+            thigh.keyframe_insert(data_path="scale", frame=90)
+
+        # Shins also extend
+        if f'shin.{side}' in rig.pose.bones:
+            shin = rig.pose.bones[f'shin.{side}']
+
+            for frame, angle, scale in [(1, -1.2, 1.0), (45, -0.6, 1.15), (90, 0.0, 1.3)]:
+                bpy.context.scene.frame_set(frame)
+                shin.rotation_euler = (angle, 0, 0)
+                shin.scale = (1, 1, scale)
+                shin.keyframe_insert(data_path="rotation_euler", frame=frame)
+                shin.keyframe_insert(data_path="scale", frame=frame)
+
+    bpy.ops.object.mode_set(mode='OBJECT')
+    export_animation(action, "RiseFromKnees")
+
+def create_meditation_glitch_animation(rig):
+    """
+    Emote: Head rotates 360° on segmented neck, halo spins rapidly
+    """
+    print("Creating meditation glitch animation...")
+
+    action = bpy.data.actions.new(name="MeditationGlitch")
+    rig.animation_data.action = action
+
+    bpy.context.scene.frame_start = 1
+    bpy.context.scene.frame_end = 120  # 4 seconds
+
+    bpy.ops.object.mode_set(mode='POSE')
+
+    # Head rotates 360° on Z-axis (looking around)
     if 'head' in rig.pose.bones:
         head = rig.pose.bones['head']
 
-        # Start neutral
+        # Full 360° rotation
         bpy.context.scene.frame_set(1)
         head.rotation_euler = (0, 0, 0)
         head.keyframe_insert(data_path="rotation_euler", frame=1)
 
-        # Slow turn toward camera
+        bpy.context.scene.frame_set(30)
+        head.rotation_euler = (0, 0, 1.57)  # 90°
+        head.keyframe_insert(data_path="rotation_euler", frame=30)
+
         bpy.context.scene.frame_set(60)
-        head.rotation_euler = (0.1, 0, 0)  # Slight tilt forward
+        head.rotation_euler = (0, 0, 3.14)  # 180°
         head.keyframe_insert(data_path="rotation_euler", frame=60)
 
-        # Hold the stare
         bpy.context.scene.frame_set(90)
-        head.rotation_euler = (0.1, 0, 0)
+        head.rotation_euler = (0, 0, 4.71)  # 270°
         head.keyframe_insert(data_path="rotation_euler", frame=90)
 
-        # Return
         bpy.context.scene.frame_set(120)
-        head.rotation_euler = (0, 0, 0)
+        head.rotation_euler = (0, 0, 6.28)  # 360° (full rotation)
         head.keyframe_insert(data_path="rotation_euler", frame=120)
 
-    # Neck elongates slightly (horror effect)
+    # Neck segments crane unnaturally
     if 'neck' in rig.pose.bones:
         neck = rig.pose.bones['neck']
 
-        for frame, scale in [(1, 1.0), (60, 1.15), (90, 1.15), (120, 1.0)]:
+        # Neck bends and straightens during rotation
+        for frame, angle in [(1, 0.0), (30, 0.2), (60, 0.0), (90, -0.2), (120, 0.0)]:
             bpy.context.scene.frame_set(frame)
-            neck.scale = (1, 1, scale)
-            neck.keyframe_insert(data_path="scale", frame=frame)
+            neck.rotation_euler = (angle, 0, 0)  # Forward/backward craning
+            neck.keyframe_insert(data_path="rotation_euler", frame=frame)
+
+    # Note: Halo spinning would need object-level animation (not bone)
+    # For now, we'll simulate it with spine rotation
+    if 'spine.004' in rig.pose.bones:  # Upper spine (halo attached)
+        upper_spine = rig.pose.bones['spine.004']
+
+        # Rapid spin effect
+        for frame in range(1, 121, 10):
+            bpy.context.scene.frame_set(frame)
+            rotation = (frame / 120.0) * 12.56  # Multiple rotations
+            upper_spine.rotation_euler = (0, 0, rotation)
+            upper_spine.keyframe_insert(data_path="rotation_euler", frame=frame)
 
     bpy.ops.object.mode_set(mode='OBJECT')
-    export_animation(action, "TheStare")
+    export_animation(action, "MeditationGlitch")
 
 def export_animation(action, name):
     """Export animation as FBX"""
@@ -252,7 +299,7 @@ def main():
     import sys
 
     print("=" * 60)
-    print("ANIMATION CREATION PIPELINE")
+    print("ANIMATION CREATION PIPELINE - The Penitent Mechanism")
     print("=" * 60)
     print(f"Blender version: {bpy.app.version_string}")
     print(f"Python version: {sys.version}")
@@ -294,22 +341,22 @@ def main():
         print(f"  Bones: {len(rig.data.bones)}")
         print(f"  Sample bones: {[b.name for b in list(rig.data.bones)[:5]]}\n")
 
-        # Create animations
+        # Create animations for The Penitent Mechanism
         print("STEP 1: Creating idle animation...")
         create_idle_animation(rig)
         print("  ✓ Idle animation created\n")
 
-        print("STEP 2: Creating mechanical unfold animation...")
-        create_mechanical_unfold_animation(rig)
-        print("  ✓ Mechanical unfold animation created\n")
+        print("STEP 2: Creating Prayer Unfold animation...")
+        create_prayer_unfold_animation(rig)
+        print("  ✓ Prayer Unfold animation created\n")
 
-        print("STEP 3: Creating system reboot animation...")
-        create_system_reboot_animation(rig)
-        print("  ✓ System reboot animation created\n")
+        print("STEP 3: Creating Rise from Knees animation...")
+        create_rise_from_knees_animation(rig)
+        print("  ✓ Rise from Knees animation created\n")
 
-        print("STEP 4: Creating 'The Stare' animation...")
-        create_the_stare_animation(rig)
-        print("  ✓ 'The Stare' animation created\n")
+        print("STEP 4: Creating Meditation Glitch animation...")
+        create_meditation_glitch_animation(rig)
+        print("  ✓ Meditation Glitch animation created\n")
 
         # List created actions
         actions = [action for action in bpy.data.actions]
