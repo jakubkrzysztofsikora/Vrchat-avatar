@@ -1,12 +1,12 @@
 #!/usr/bin/env python3
 """
-Screenshot Rendering Script for The Forgotten Architect
+Screenshot Rendering Script for The Penitent Mechanism
 Renders 5 high-quality views:
 - Front view
 - Back view
-- Close-up face
-- Pose 1 (Mechanical Unfold)
-- Pose 2 (The Stare)
+- Close-up face (bronze mask)
+- Pose 1 (Prayer Unfold)
+- Pose 2 (Meditation Glitch)
 """
 
 import bpy
@@ -125,7 +125,7 @@ def find_avatar_rig():
     """Find the avatar armature"""
     print("Searching for avatar rig...")
     for obj in bpy.data.objects:
-        if obj.type == 'ARMATURE' and 'Forgotten' in obj.name:
+        if obj.type == 'ARMATURE' and 'Penitent' in obj.name:
             print(f"  Found rig: {obj.name}")
             return obj
     # Fallback: return first armature
@@ -194,15 +194,56 @@ def validate_scene():
         print("  ✓ Scene validation passed")
         return True
 
+def get_avatar_bounds():
+    """Calculate bounding box of all avatar mesh objects"""
+    mesh_objects = [obj for obj in bpy.data.objects
+                    if obj.type == 'MESH' and not obj.name.startswith('WGT-')]
+
+    if not mesh_objects:
+        print("WARNING: No mesh objects found for bounds calculation")
+        return Vector((0, 0, 1.0)), Vector((1, 1, 2))
+
+    # Get all vertex coordinates in world space
+    all_coords = []
+    for obj in mesh_objects:
+        for vertex in obj.data.vertices:
+            world_coord = obj.matrix_world @ vertex.co
+            all_coords.append(world_coord)
+
+    if not all_coords:
+        return Vector((0, 0, 1.0)), Vector((1, 1, 2))
+
+    # Calculate bounds
+    min_x = min(v.x for v in all_coords)
+    max_x = max(v.x for v in all_coords)
+    min_y = min(v.y for v in all_coords)
+    max_y = max(v.y for v in all_coords)
+    min_z = min(v.z for v in all_coords)
+    max_z = max(v.z for v in all_coords)
+
+    bounds_center = Vector((
+        (min_x + max_x) / 2,
+        (min_y + max_y) / 2,
+        (min_z + max_z) / 2
+    ))
+
+    bounds_size = Vector((
+        max_x - min_x,
+        max_y - min_y,
+        max_z - min_z
+    ))
+
+    return bounds_center, bounds_size
+
 def get_rig_target(rig):
     """Return a point for the camera to look at (chest/head area, not feet)."""
     if rig:
         # Target the chest/head area, not the armature origin (which is at feet)
-        # Avatar is ~2.1m tall, so chest is around 1.4-1.6m
+        # Avatar is ~1.8m kneeling, so chest/head is around 1.3-1.5m
         rig_origin = rig.matrix_world.translation
-        chest_height = Vector((rig_origin.x, rig_origin.y, rig_origin.z + 1.5))
+        chest_height = Vector((rig_origin.x, rig_origin.y, rig_origin.z + 1.4))
         return chest_height
-    return Vector((0.0, 0.0, 1.5))
+    return Vector((0.0, 0.0, 1.4))
 
 
 def point_camera_at(camera, target_point):
@@ -242,16 +283,16 @@ def position_camera_for_view(camera, view_type, rig, bounds_center, bounds_size)
         return  # Skip the main point_camera_at call below
 
     elif view_type == 'pose1':
-        # Mechanical unfold - 3/4 side view to show both front and side
+        # Prayer unfold - 3/4 side view to show arms raising
         camera.location = (3.5, -2.5, 1.2)
         camera.data.lens = 40
-        print(f"  Pose 1 (mech unfold): camera at {camera.location}, lens {camera.data.lens}mm")
+        print(f"  Pose 1 (prayer unfold): camera at {camera.location}, lens {camera.data.lens}mm")
 
     elif view_type == 'pose2':
-        # The stare - front 3/4 view
+        # Meditation glitch - front 3/4 view showing head rotation
         camera.location = (1.8, -4.0, 1.4)
         camera.data.lens = 45
-        print(f"  Pose 2 (the stare): camera at {camera.location}, lens {camera.data.lens}mm")
+        print(f"  Pose 2 (meditation glitch): camera at {camera.location}, lens {camera.data.lens}mm")
 
     point_camera_at(camera, target_point)
 
@@ -271,10 +312,10 @@ def apply_pose(rig, pose_name):
     rig.animation_data.action = action
 
     # Set frame to mid-point of animation (most dramatic pose)
-    if pose_name == "MechanicalUnfold":
-        bpy.context.scene.frame_set(30)
-    elif pose_name == "TheStare":
-        bpy.context.scene.frame_set(60)
+    if pose_name == "PrayerUnfold":
+        bpy.context.scene.frame_set(30)  # Mid-point of arms raising
+    elif pose_name == "MeditationGlitch":
+        bpy.context.scene.frame_set(60)  # 180° head rotation point
 
 def render_view(camera, view_type, rig=None, pose=None, bounds_center=None, bounds_size=None):
     """Render a specific view"""
@@ -335,8 +376,8 @@ def main():
     render_view(camera, 'front', rig, bounds_center=bounds_center, bounds_size=bounds_size)
     render_view(camera, 'back', rig, bounds_center=bounds_center, bounds_size=bounds_size)
     render_view(camera, 'face', rig, bounds_center=bounds_center, bounds_size=bounds_size)
-    render_view(camera, 'pose1', rig, pose='MechanicalUnfold', bounds_center=bounds_center, bounds_size=bounds_size)
-    render_view(camera, 'pose2', rig, pose='TheStare', bounds_center=bounds_center, bounds_size=bounds_size)
+    render_view(camera, 'pose1', rig, pose='PrayerUnfold', bounds_center=bounds_center, bounds_size=bounds_size)
+    render_view(camera, 'pose2', rig, pose='MeditationGlitch', bounds_center=bounds_center, bounds_size=bounds_size)
 
     print("=" * 60)
     print("Screenshot rendering complete!")
