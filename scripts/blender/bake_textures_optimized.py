@@ -48,13 +48,14 @@ def material_complexity_analysis(material):
     print(f"    DEBUG: Material '{material.name}' has nodes: {node_types}")
 
     # Check for procedural texture nodes
+    # NOTE: Using node.type strings (e.g., 'TEX_NOISE'), NOT class names (e.g., 'ShaderNodeTexNoise')
     procedural_nodes = {
-        'ShaderNodeTexNoise': 1,
-        'ShaderNodeTexVoronoi': 2,
-        'ShaderNodeTexMusgrave': 2,
-        'ShaderNodeTexWave': 1,
-        'ShaderNodeTexMagic': 1,
-        'ShaderNodeTexBrick': 1,
+        'TEX_NOISE': 1,
+        'TEX_VORONOI': 2,
+        'TEX_MUSGRAVE': 2,
+        'TEX_WAVE': 1,
+        'TEX_MAGIC': 1,
+        'TEX_BRICK': 1,
     }
 
     complexity = 0
@@ -64,7 +65,8 @@ def material_complexity_analysis(material):
             print(f"    DEBUG: Found procedural node {node.type}, complexity now {complexity}")
 
     # Check for color ramps, mix nodes (add complexity)
-    mix_nodes_found = [n.type for n in nodes if n.type in ['ShaderNodeValToRGB', 'ShaderNodeMixRGB']]
+    # NOTE: Using node.type strings, NOT class names
+    mix_nodes_found = [n.type for n in nodes if n.type in ['VALTORGB', 'MIX_RGB', 'MIX']]
     if mix_nodes_found:
         complexity = max(complexity, 1)
         print(f"    DEBUG: Found mix/ramp nodes: {mix_nodes_found}, complexity now {complexity}")
@@ -224,14 +226,6 @@ def bake_all_textures_optimized():
 
         mat = obj.data.materials[0]
         complexity, needs_baking = material_complexity_analysis(mat)
-
-        # Force baking for known procedural materials (fallback if detection fails)
-        force_bake = any(keyword in mat.name for keyword in ['Bronze', 'MAT_Bronze'])
-
-        if force_bake and not needs_baking:
-            print(f"  ⚠ Forcing bake for {obj.name}: Material '{mat.name}' should be procedural but wasn't detected!")
-            needs_baking = True
-            complexity = 1
 
         if SKIP_SIMPLE_MATERIALS and not needs_baking:
             objects_skipped.append(obj)
