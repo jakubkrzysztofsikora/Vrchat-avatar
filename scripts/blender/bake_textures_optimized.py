@@ -219,17 +219,26 @@ def bake_all_textures_optimized():
     for obj in mesh_objects:
         if not obj.data.materials:
             objects_skipped.append(obj)
+            print(f"  ⏭ Skipping {obj.name}: no material assigned")
             continue
 
         mat = obj.data.materials[0]
         complexity, needs_baking = material_complexity_analysis(mat)
 
+        # Force baking for known procedural materials (fallback if detection fails)
+        force_bake = any(keyword in mat.name for keyword in ['Bronze', 'MAT_Bronze'])
+
+        if force_bake and not needs_baking:
+            print(f"  ⚠ Forcing bake for {obj.name}: Material '{mat.name}' should be procedural but wasn't detected!")
+            needs_baking = True
+            complexity = 1
+
         if SKIP_SIMPLE_MATERIALS and not needs_baking:
             objects_skipped.append(obj)
-            print(f"  ⏭ Skipping {obj.name}: solid color material (complexity=0)")
+            print(f"  ⏭ Skipping {obj.name}: solid color material '{mat.name}' (complexity=0)")
         else:
             objects_to_bake.append(obj)
-            print(f"  ✓ Will bake {obj.name}: procedural material (complexity={complexity})")
+            print(f"  ✓ Will bake {obj.name}: material '{mat.name}' (complexity={complexity})")
 
     print(f"\nBaking summary:")
     print(f"  Objects to bake: {len(objects_to_bake)}")
