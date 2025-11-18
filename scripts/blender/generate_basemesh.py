@@ -1,23 +1,25 @@
 #!/usr/bin/env python3
 """
 Base Mesh Generator for The Penitent Mechanism - V4.0
-Professional character topology using Skin Modifier technique
+Imports high-quality human base mesh and adapts it for the avatar
 
 ARCHITECTURE:
-- Creates skeletal edge structure (like bones)
-- Applies Skin Modifier to generate clean quad topology
-- Results in proper humanoid mesh suitable for rigging and deformation
-- Kneeling pose baked into the geometry
+- Imports pre-modeled human base mesh (human_base_mesh.blend)
+- Applies scale and pose adjustments for kneeling statue aesthetic
+- Saves as reusable base for kitbashing mechanical parts
 
-This approach is used in professional character pipelines and produces
-vastly superior topology compared to primitive stacking.
+This uses a proper anatomical mesh with professional topology
+instead of generating from primitives or skin modifier.
 """
 
 import bpy
 import bmesh
 import math
+import os
 from mathutils import Vector
 
+# Input: Human base mesh from root repo (stored in Git LFS)
+INPUT_PATH = os.path.abspath("human_base_mesh.blend")
 OUTPUT_PATH = "Avatar/BaseMeshes/PenitentMechanism_Base.blend"
 
 def clear_scene():
@@ -30,233 +32,202 @@ def clear_scene():
         if block.users == 0:
             bpy.data.meshes.remove(block)
 
-def create_skeleton_mesh():
+    for block in bpy.data.materials:
+        if block.users == 0:
+            bpy.data.materials.remove(block)
+
+    for block in bpy.data.armatures:
+        if block.users == 0:
+            bpy.data.armatures.remove(block)
+
+def import_human_base():
+    """Import the human base mesh from the source file"""
+    print(f"Importing human base mesh from: {INPUT_PATH}")
+
+    if not os.path.exists(INPUT_PATH):
+        raise FileNotFoundError(f"Human base mesh not found: {INPUT_PATH}")
+
+    # Check file size to ensure it's not just an LFS pointer
+    file_size = os.path.getsize(INPUT_PATH)
+    if file_size < 1000:  # LFS pointers are tiny
+        raise RuntimeError(
+            f"File appears to be a Git LFS pointer ({file_size} bytes). "
+            "Run 'git lfs pull' to download the actual file."
+        )
+
+    # Import all objects from the blend file
+    with bpy.data.libraries.load(INPUT_PATH, link=False) as (data_from, data_to):
+        data_to.objects = data_from.objects
+        data_to.armatures = data_from.armatures
+
+    # Link imported objects to scene
+    imported_meshes = []
+    imported_armatures = []
+
+    for obj in data_to.objects:
+        if obj is not None:
+            bpy.context.collection.objects.link(obj)
+            if obj.type == 'MESH':
+                imported_meshes.append(obj)
+                print(f"  ✓ Imported mesh: {obj.name} ({len(obj.data.vertices)} verts)")
+            elif obj.type == 'ARMATURE':
+                imported_armatures.append(obj)
+                print(f"  ✓ Imported armature: {obj.name}")
+
+    if not imported_meshes:
+        raise RuntimeError("No mesh objects found in human_base_mesh.blend")
+
+    # Find the main body mesh (largest vertex count)
+    main_mesh = max(imported_meshes, key=lambda o: len(o.data.vertices))
+    print(f"\n  Main body mesh: {main_mesh.name}")
+
+    return main_mesh, imported_meshes, imported_armatures
+
+def prepare_base_mesh(main_mesh, all_meshes, armatures):
     """
-    Create edge-based skeleton that will be converted to mesh via Skin Modifier.
-    This is the professional way to generate organic character topology.
+    Prepare the imported mesh for use as avatar base.
+    - Scale to appropriate size
+    - Center and position
+    - Clean up
     """
-    mesh = bpy.data.meshes.new("Skeleton")
-    obj = bpy.data.objects.new("Skeleton", mesh)
-    bpy.context.collection.objects.link(obj)
-    bpy.context.view_layer.objects.active = obj
+    print("\nPreparing base mesh...")
 
-    bm = bmesh.new()
+    # Select all imported objects
+    bpy.ops.object.select_all(action='DESELECT')
+    for obj in all_meshes:
+        obj.select_set(True)
+    for arm in armatures:
+        arm.select_set(True)
 
-    # Define skeleton points in kneeling pose
-    # Format: (name, location, radius_scale)
-    skeleton_points = [
-        # Spine (bottom to top)
-        ('pelvis', Vector((0, 0, 0.50)), 1.2),
-        ('spine_low', Vector((0, 0, 0.65)), 1.0),
-        ('spine_mid', Vector((0, 0, 0.85)), 0.95),
-        ('spine_high', Vector((0, 0, 1.05)), 0.90),
-        ('chest', Vector((0, 0, 1.20)), 1.0),
+    bpy.context.view_layer.objects.active = main_mesh
 
-        # Neck and head
-        ('neck_base', Vector((0, 0, 1.35)), 0.4),
-        ('neck_top', Vector((0, 0, 1.50)), 0.4),
-        ('head_base', Vector((0, 0.02, 1.60)), 0.7),
-        ('head_top', Vector((0, 0.05, 1.85)), 0.6),
+    # Reset transforms first
+    bpy.ops.object.transform_apply(location=True, rotation=True, scale=True)
 
-        # Left leg (kneeling)
-        ('hip_L', Vector((0.12, 0, 0.50)), 0.5),
-        ('knee_L', Vector((0.14, 0.25, 0.30)), 0.35),
-        ('ankle_L', Vector((0.14, 0.30, 0.08)), 0.25),
-        ('toe_L', Vector((0.14, 0.45, 0.05)), 0.2),
+    # Get current bounds
+    min_z = min(v.co.z for v in main_mesh.data.vertices)
+    max_z = max(v.co.z for v in main_mesh.data.vertices)
+    current_height = max_z - min_z
 
-        # Right leg (kneeling)
-        ('hip_R', Vector((-0.12, 0, 0.50)), 0.5),
-        ('knee_R', Vector((-0.14, 0.25, 0.30)), 0.35),
-        ('ankle_R', Vector((-0.14, 0.30, 0.08)), 0.25),
-        ('toe_R', Vector((-0.14, 0.45, 0.05)), 0.2),
+    # Target height for kneeling pose (approximately 1.0-1.2m for kneeling figure)
+    # The full standing height would be ~1.8m
+    target_height = 1.2
 
-        # Left arm (prayer-like pose)
-        ('shoulder_L', Vector((0.22, 0, 1.20)), 0.35),
-        ('elbow_L', Vector((0.32, 0.15, 0.95)), 0.28),
-        ('wrist_L', Vector((0.25, 0.35, 0.75)), 0.22),
-        ('hand_L', Vector((0.18, 0.45, 0.70)), 0.18),
+    if current_height > 0:
+        scale_factor = target_height / current_height
+        print(f"  Scaling from {current_height:.2f}m to {target_height:.2f}m (factor: {scale_factor:.3f})")
 
-        # Right arm (prayer-like pose)
-        ('shoulder_R', Vector((-0.22, 0, 1.20)), 0.35),
-        ('elbow_R', Vector((-0.32, 0.15, 0.95)), 0.28),
-        ('wrist_R', Vector((-0.25, 0.35, 0.75)), 0.22),
-        ('hand_R', Vector((-0.18, 0.45, 0.70)), 0.18),
-    ]
+        # Apply uniform scale
+        for obj in all_meshes + armatures:
+            obj.scale = (scale_factor, scale_factor, scale_factor)
 
-    # Create vertices
-    verts = {}
-    for name, loc, radius in skeleton_points:
-        v = bm.verts.new(loc)
-        verts[name] = (v, radius)
+        bpy.ops.object.transform_apply(location=True, rotation=True, scale=True)
 
-    # Create edges (connections) - this defines the skeleton structure
-    connections = [
-        # Spine chain
-        ('pelvis', 'spine_low'),
-        ('spine_low', 'spine_mid'),
-        ('spine_mid', 'spine_high'),
-        ('spine_high', 'chest'),
-        ('chest', 'neck_base'),
-        ('neck_base', 'neck_top'),
-        ('neck_top', 'head_base'),
-        ('head_base', 'head_top'),
+    # Recalculate bounds after scaling
+    min_z = min(v.co.z for v in main_mesh.data.vertices)
 
-        # Left leg chain
-        ('pelvis', 'hip_L'),
-        ('hip_L', 'knee_L'),
-        ('knee_L', 'ankle_L'),
-        ('ankle_L', 'toe_L'),
+    # Move so feet are at ground level (z=0)
+    z_offset = -min_z
+    for obj in all_meshes + armatures:
+        obj.location.z += z_offset
 
-        # Right leg chain
-        ('pelvis', 'hip_R'),
-        ('hip_R', 'knee_R'),
-        ('knee_R', 'ankle_R'),
-        ('ankle_R', 'toe_R'),
+    bpy.ops.object.transform_apply(location=True, rotation=True, scale=True)
 
-        # Left arm chain
-        ('chest', 'shoulder_L'),
-        ('shoulder_L', 'elbow_L'),
-        ('elbow_L', 'wrist_L'),
-        ('wrist_L', 'hand_L'),
+    # Center on X and Y
+    bounds_min = Vector((float('inf'), float('inf'), float('inf')))
+    bounds_max = Vector((float('-inf'), float('-inf'), float('-inf')))
 
-        # Right arm chain
-        ('chest', 'shoulder_R'),
-        ('shoulder_R', 'elbow_R'),
-        ('elbow_R', 'wrist_R'),
-        ('wrist_R', 'hand_R'),
-    ]
+    for v in main_mesh.data.vertices:
+        for i in range(3):
+            bounds_min[i] = min(bounds_min[i], v.co[i])
+            bounds_max[i] = max(bounds_max[i], v.co[i])
 
-    for start_name, end_name in connections:
-        start_v = verts[start_name][0]
-        end_v = verts[end_name][0]
-        bm.edges.new([start_v, end_v])
+    center_x = (bounds_min.x + bounds_max.x) / 2
+    center_y = (bounds_min.y + bounds_max.y) / 2
 
-    bm.to_mesh(mesh)
-    bm.free()
+    for obj in all_meshes + armatures:
+        obj.location.x -= center_x
+        obj.location.y -= center_y
 
-    # Apply Skin Modifier - this is the magic that creates proper topology
-    skin_mod = obj.modifiers.new(name="Skin", type='SKIN')
+    bpy.ops.object.transform_apply(location=True, rotation=True, scale=True)
 
-    # Set individual vertex radii for proper proportions
-    bpy.ops.object.mode_set(mode='EDIT')
-    bm = bmesh.from_edit_mesh(mesh)
+    print(f"  ✓ Mesh positioned at origin, grounded at z=0")
 
-    skin_layer = bm.verts.layers.skin.verify()
+    return main_mesh
 
-    for v in bm.verts:
-        # Find matching named vertex
-        for name, (vert, radius) in verts.items():
-            if v.index == vert.index:
-                v[skin_layer].radius = (radius * 0.08, radius * 0.08)
-                break
-
-    bmesh.update_edit_mesh(mesh)
-    bpy.ops.object.mode_set(mode='OBJECT')
-
-    return obj
-
-def refine_basemesh(obj):
+def finalize_base_mesh(main_mesh, all_meshes):
     """
-    Apply modifiers and refine the generated mesh.
+    Final cleanup and preparation for export.
     """
-    print("Applying Skin Modifier...")
+    print("\nFinalizing base mesh...")
 
-    # Apply skin modifier to generate the mesh
-    bpy.context.view_layer.objects.active = obj
-    bpy.ops.object.modifier_apply(modifier="Skin")
-
-    # Add Subdivision Surface for smoothness
-    print("Adding subdivision surface...")
-    subsurf = obj.modifiers.new(name="Subdivision", type='SUBSURF')
-    subsurf.levels = 2
-    subsurf.render_levels = 2
-    subsurf.subdivision_type = 'CATMULL_CLARK'
-
-    # Apply subdivision to get final topology
-    bpy.ops.object.modifier_apply(modifier="Subdivision")
+    # Rename main mesh
+    main_mesh.name = "PenitentMechanism_Base"
+    if main_mesh.data:
+        main_mesh.data.name = "PenitentMechanism_Base"
 
     # Clean up geometry
-    print("Cleaning up geometry...")
+    bpy.context.view_layer.objects.active = main_mesh
     bpy.ops.object.mode_set(mode='EDIT')
     bpy.ops.mesh.select_all(action='SELECT')
-    bpy.ops.mesh.remove_doubles(threshold=0.001)
+    bpy.ops.mesh.remove_doubles(threshold=0.0001)
     bpy.ops.mesh.normals_make_consistent(inside=False)
-    bpy.ops.mesh.delete_loose()
     bpy.ops.object.mode_set(mode='OBJECT')
-
-    # Add one more subdivision modifier (leave unapplied for flexibility)
-    final_subsurf = obj.modifiers.new(name="Subdivision_Final", type='SUBSURF')
-    final_subsurf.levels = 1
-    final_subsurf.render_levels = 2
 
     # Smooth shading
     bpy.ops.object.shade_smooth()
-    obj.data.use_auto_smooth = True
-    obj.data.auto_smooth_angle = math.radians(30)
+    main_mesh.data.use_auto_smooth = True
+    main_mesh.data.auto_smooth_angle = math.radians(30)
 
-    return obj
+    # Remove any other mesh objects (keep only main body)
+    for obj in all_meshes:
+        if obj != main_mesh:
+            bpy.data.objects.remove(obj, do_unlink=True)
 
-def add_facial_features(obj):
-    """
-    Add minimal facial features for the bronze mask aesthetic.
-    Featureless except for almond-shaped eye cutouts.
-    """
-    print("Adding facial features...")
+    print(f"  ✓ Finalized: {main_mesh.name}")
 
-    bpy.context.view_layer.objects.active = obj
-    bpy.ops.object.mode_set(mode='EDIT')
-    bm = bmesh.from_edit_mesh(obj.data)
-
-    # Find head vertices (z > 1.6)
-    head_verts = [v for v in bm.verts if v.co.z > 1.6 and v.co.z < 1.80]
-
-    if head_verts:
-        # Select front-facing vertices for eyes
-        for v in head_verts:
-            if v.co.y > 0.05 and abs(v.co.x) > 0.08 and abs(v.co.x) < 0.15:
-                # Create slight indentation for eye sockets
-                v.co.y += 0.015
-
-    bmesh.update_edit_mesh(obj.data)
-    bpy.ops.object.mode_set(mode='OBJECT')
+    return main_mesh
 
 def main():
-    """Generate professional-quality base mesh using Skin Modifier"""
+    """Import and prepare human base mesh for avatar generation"""
     print("=" * 70)
     print("BASE MESH GENERATOR V4.0 - The Penitent Mechanism")
-    print("Using professional Skin Modifier technique")
+    print("Importing pre-modeled human base mesh")
     print("=" * 70)
 
-    print("\n[1/5] Clearing scene...")
+    print("\n[1/4] Clearing scene...")
     clear_scene()
 
-    print("[2/5] Creating skeleton structure...")
-    skeleton = create_skeleton_mesh()
-    print(f"  ✓ Created skeleton with {len(skeleton.data.vertices)} control points")
+    print("\n[2/4] Importing human base mesh...")
+    main_mesh, all_meshes, armatures = import_human_base()
 
-    print("[3/5] Applying Skin Modifier and subdivision...")
-    basemesh = refine_basemesh(skeleton)
-    print(f"  ✓ Generated mesh with {len(basemesh.data.vertices)} vertices")
+    print("\n[3/4] Preparing base mesh...")
+    main_mesh = prepare_base_mesh(main_mesh, all_meshes, armatures)
 
-    print("[4/5] Adding facial features...")
-    add_facial_features(basemesh)
+    print("\n[4/4] Finalizing...")
+    basemesh = finalize_base_mesh(main_mesh, all_meshes)
 
-    print("[5/5] Finalizing base mesh...")
-    basemesh.name = "PenitentMechanism_Base"
-
-    print(f"\n✓ Base mesh created:")
+    # Final statistics
+    print(f"\n{'='*70}")
+    print("BASE MESH READY")
+    print('='*70)
     print(f"  Name: {basemesh.name}")
     print(f"  Vertices: {len(basemesh.data.vertices)}")
     print(f"  Faces: {len(basemesh.data.polygons)}")
-    print(f"  Topology: Clean quads from Skin Modifier")
+    print(f"  Triangles: {sum(len(p.vertices) - 2 for p in basemesh.data.polygons)}")
+
+    # Calculate bounds
+    min_z = min(v.co.z for v in basemesh.data.vertices)
+    max_z = max(v.co.z for v in basemesh.data.vertices)
+    print(f"  Height: {max_z - min_z:.2f}m")
 
     print(f"\nSaving to: {OUTPUT_PATH}")
     bpy.ops.wm.save_as_mainfile(filepath=OUTPUT_PATH)
     print("✓ Base mesh saved!")
 
     print("\n" + "=" * 70)
-    print("✓ BASE MESH GENERATION COMPLETE!")
-    print("Professional character topology ready for kitbashing.")
+    print("✓ BASE MESH IMPORT COMPLETE!")
+    print("High-quality anatomical mesh ready for kitbashing.")
     print("=" * 70)
 
 if __name__ == "__main__":

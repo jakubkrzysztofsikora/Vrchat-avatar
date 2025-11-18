@@ -59,16 +59,16 @@ jobs:
           /opt/blender/blender --version
 
       #########################################
-      # STEP 3a: Generate Base Mesh (V4 Architecture - Skin Modifier)
+      # STEP 3a: Generate Base Mesh (V4 Architecture - Import human base)
       #########################################
       - name: Generate Base Mesh
         run: |
-          echo "Generating base mesh for The Penitent Mechanism (V4 Architecture - Skin Modifier)..."
+          echo "Importing human base mesh for The Penitent Mechanism (V4 Architecture)..."
 
           # Ensure base mesh directory exists
           mkdir -p Avatar/BaseMeshes
 
-          # Generate base mesh first
+          # Import and prepare base mesh from human_base_mesh.blend
           /opt/blender/blender --background --enable-autoexec --python scripts/blender/generate_basemesh.py 2>&1 | tee blender_basemesh.log
 
           # Check if base mesh was created
@@ -78,7 +78,7 @@ jobs:
             exit 1
           fi
 
-          echo "Base mesh generated successfully!"
+          echo "Base mesh imported and prepared successfully!"
           ls -lh Avatar/BaseMeshes/
 
       #########################################
@@ -109,7 +109,7 @@ jobs:
       #########################################
       - name: Generate Avatar Model
         run: |
-          echo "Generating The Penitent Mechanism avatar (V4 - Skin Modifier base + imported kitbash assets)..."
+          echo "Generating The Penitent Mechanism avatar (V4 - human base mesh + imported kitbash assets)..."
 
           # Ensure output directories exist
           mkdir -p Avatar/Textures Avatar/Animations Avatar/Materials Avatar/Prefabs
