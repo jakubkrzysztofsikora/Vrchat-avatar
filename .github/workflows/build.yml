@@ -59,11 +59,11 @@ jobs:
           /opt/blender/blender --version
 
       #########################################
-      # STEP 3a: Generate Base Mesh (V3 Architecture)
+      # STEP 3a: Generate Base Mesh (V4 Architecture - Skin Modifier)
       #########################################
       - name: Generate Base Mesh
         run: |
-          echo "Generating base mesh for The Penitent Mechanism (V3 Architecture)..."
+          echo "Generating base mesh for The Penitent Mechanism (V4 Architecture - Skin Modifier)..."
 
           # Ensure base mesh directory exists
           mkdir -p Avatar/BaseMeshes
@@ -82,16 +82,39 @@ jobs:
           ls -lh Avatar/BaseMeshes/
 
       #########################################
-      # STEP 3b: Generate Avatar Model (V3 - Kitbashing)
+      # STEP 3b: Generate Kitbash Assets (V4 Architecture)
+      #########################################
+      - name: Generate Kitbash Assets
+        run: |
+          echo "Generating kitbash assets (mechanical halo, shoulder, blade hands, cables)..."
+
+          # Ensure kitbash directory exists
+          mkdir -p Avatar/Kitbash
+
+          # Generate all kitbash assets
+          /opt/blender/blender --background --enable-autoexec --python scripts/blender/generate_kitbash_assets.py 2>&1 | tee blender_kitbash.log
+
+          # Check if kitbash assets were created
+          if [ ! -d "Avatar/Kitbash" ] || [ -z "$(ls -A Avatar/Kitbash/*.blend 2>/dev/null)" ]; then
+            echo "ERROR: Kitbash asset generation failed!"
+            cat blender_kitbash.log
+            exit 1
+          fi
+
+          echo "Kitbash assets generated successfully!"
+          ls -lh Avatar/Kitbash/
+
+      #########################################
+      # STEP 3c: Generate Avatar Model (V4 - True Kitbashing)
       #########################################
       - name: Generate Avatar Model
         run: |
-          echo "Generating The Penitent Mechanism avatar (V3 - Base Mesh + Kitbashing)..."
+          echo "Generating The Penitent Mechanism avatar (V4 - Skin Modifier base + imported kitbash assets)..."
 
           # Ensure output directories exist
           mkdir -p Avatar/Textures Avatar/Animations Avatar/Materials Avatar/Prefabs
 
-          # Run V3 generator (imports base mesh, adds mechanical details)
+          # Run V4 generator (imports base mesh, imports kitbash assets)
           /opt/blender/blender --background --enable-autoexec --python scripts/blender/generate_avatar_v3.py 2>&1 | tee blender_generate.log
 
           # Check if blend file was created
@@ -101,7 +124,7 @@ jobs:
             exit 1
           fi
 
-          echo "Avatar model generated successfully (V3)!"
+          echo "Avatar model generated successfully (V4 architecture)!"
 
       #########################################
       # STEP 4: Bake Textures (Optimized)
@@ -272,6 +295,8 @@ jobs:
           path: |
             Avatar/ForgottenArchitect.fbx
             Avatar/ForgottenArchitect.blend
+            Avatar/BaseMeshes/
+            Avatar/Kitbash/
             Avatar/Textures/
             Avatar/Animations/
             docs/screenshots/
@@ -283,7 +308,13 @@ jobs:
         with:
           name: build-logs
           path: |
-            blender_*.log
+            blender_basemesh.log
+            blender_kitbash.log
+            blender_generate.log
+            blender_bake.log
+            blender_animations.log
+            blender_export.log
+            blender_render.log
             unity_*.log
           retention-days: 7
 

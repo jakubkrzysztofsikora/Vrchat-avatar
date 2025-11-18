@@ -1,13 +1,14 @@
 #!/usr/bin/env python3
 """
-The Penitent Mechanism - Avatar Generator V3.0
-Complete architectural refactor using base mesh approach
+The Penitent Mechanism - Avatar Generator V4.0
+Professional character pipeline with kitbashed mechanical assets
 
-ARCHITECTURE CHANGE:
-- V1/V2: Built entire character from UV spheres and cylinders (snowman result)
-- V3: Imports sculpted base mesh, then adds mechanical details via kitbashing
+ARCHITECTURE V4.0:
+- V1/V2: Built from UV spheres and cylinders (snowman result)
+- V3: Attempted base mesh + kitbashing but still used primitives
+- V4: TRUE kitbashing - base mesh (Skin Modifier) + pre-modeled mechanical assets
 
-This produces proper character topology instead of stacked primitives.
+This produces professional character topology suitable for VRChat.
 """
 
 import bpy
@@ -19,6 +20,7 @@ from mathutils import Vector, Euler
 
 # Paths
 BASEMESH_PATH = os.path.abspath("Avatar/BaseMeshes/PenitentMechanism_Base.blend")
+KITBASH_DIR = os.path.abspath("Avatar/Kitbash/")
 OUTPUT_PATH = os.path.abspath("Avatar/ForgottenArchitect.blend")
 
 # Configuration
@@ -58,6 +60,36 @@ def import_basemesh(filepath, object_name):
             return obj
 
     raise RuntimeError(f"Failed to import {object_name} from {filepath}")
+
+def import_kitbash_asset(asset_filename):
+    """
+    Import kitbash asset from Avatar/Kitbash directory.
+    Returns the imported object.
+    """
+    filepath = os.path.join(KITBASH_DIR, asset_filename)
+    print(f"  Importing kitbash asset: {asset_filename}")
+
+    if not os.path.exists(filepath):
+        raise FileNotFoundError(f"Kitbash asset not found: {filepath}")
+
+    # Import all objects from the file
+    with bpy.data.libraries.load(filepath, link=False) as (data_from, data_to):
+        data_to.objects = data_from.objects
+
+    # Link imported objects to scene and return the main one
+    imported_objects = []
+    for obj in data_to.objects:
+        if obj is not None:
+            bpy.context.collection.objects.link(obj)
+            imported_objects.append(obj)
+
+    if not imported_objects:
+        raise RuntimeError(f"No objects found in {asset_filename}")
+
+    # Return the largest object (usually the main assembly)
+    main_obj = max(imported_objects, key=lambda o: len(o.data.vertices) if o.type == 'MESH' else 0)
+    print(f"    ✓ Loaded: {main_obj.name} ({len(main_obj.data.vertices)} verts)")
+    return main_obj, imported_objects
 
 # ============================================================================
 # MULTI-LAYER PROCEDURAL MATERIALS
@@ -345,159 +377,133 @@ def add_surface_weathering(obj):
     displace.texture = tex
 
 # ============================================================================
-# MECHANICAL KITBASH (primitives for mech parts only)
+# MECHANICAL KITBASH (import pre-modeled assets)
 # ============================================================================
 
 def add_shoulder_mechanism(base_mesh):
-    """Add mechanical shoulder plating (right side)"""
-    print("Adding shoulder mechanism...")
+    """Import and attach pre-modeled shoulder mechanism (right side)"""
+    print("Adding shoulder mechanism (kitbash import)...")
 
-    # Main shoulder plate
-    bpy.ops.mesh.primitive_cube_add(
-        size=0.25,
-        location=(0.42, 0.05, 1.20)
-    )
-    plate = bpy.context.active_object
-    plate.name = "ShoulderPlate_Main"
-    plate.scale = (1.0, 0.8, 0.6)
-    bpy.ops.object.transform_apply(scale=True)
+    try:
+        shoulder, all_parts = import_kitbash_asset("Mech_Shoulder_01.blend")
 
-    # Add bevel for mechanical look
-    bevel = plate.modifiers.new(name="Bevel", type='BEVEL')
-    bevel.width = 0.01
-    bevel.segments = 3
+        # Join all parts into single object
+        if len(all_parts) > 1:
+            bpy.ops.object.select_all(action='DESELECT')
+            for obj in all_parts:
+                if obj.type == 'MESH':
+                    obj.select_set(True)
+            bpy.context.view_layer.objects.active = shoulder
+            bpy.ops.object.join()
 
-    # Gear 1
-    bpy.ops.mesh.primitive_cylinder_add(
-        vertices=8,
-        radius=0.08,
-        depth=0.04,
-        location=(0.50, 0.10, 1.25)
-    )
-    gear1 = bpy.context.active_object
-    gear1.name = "Gear_1"
-    gear1.rotation_euler = (0, math.radians(90), 0)
+        # Position on right shoulder
+        shoulder.location = (0.22, -0.05, 1.20)
+        shoulder.rotation_euler = (0, 0, math.radians(-10))
 
-    # Gear 2
-    bpy.ops.mesh.primitive_cylinder_add(
-        vertices=8,
-        radius=0.06,
-        depth=0.03,
-        location=(0.48, -0.05, 1.15)
-    )
-    gear2 = bpy.context.active_object
-    gear2.name = "Gear_2"
+        # Parent to base mesh
+        shoulder.parent = base_mesh
 
-    # Pistons
-    for i, z_offset in enumerate([0.05, -0.05]):
-        bpy.ops.mesh.primitive_cylinder_add(
-            vertices=6,
-            radius=0.02,
-            depth=0.12,
-            location=(0.45, z_offset, 1.10)
-        )
-        piston = bpy.context.active_object
-        piston.name = f"Piston_{i+1}"
-        piston.rotation_euler = (math.radians(90), 0, 0)
+        print(f"    ✓ Shoulder mechanism attached ({len(shoulder.data.vertices)} verts)")
+        return [shoulder]
 
-    # Parent all to base mesh
-    for obj in [plate, gear1, gear2]:
-        obj.parent = base_mesh
-
-    return [plate, gear1, gear2]
+    except FileNotFoundError:
+        print("  ⚠ Shoulder asset not found, skipping...")
+        return []
 
 def add_mechanical_halo(base_mesh):
-    """Create floating halo with bronze rings"""
-    print("Creating mechanical halo...")
+    """Import and attach pre-modeled mechanical halo"""
+    print("Creating mechanical halo (kitbash import)...")
 
-    # Main ring
-    bpy.ops.mesh.primitive_torus_add(
-        major_radius=0.40,
-        minor_radius=0.015,
-        major_segments=32,
-        minor_segments=12,
-        location=(0, 0.10, 1.90)
-    )
-    ring_main = bpy.context.active_object
-    ring_main.name = "Halo_Ring_Main"
-    ring_main.rotation_euler = (math.radians(15), 0, 0)
+    try:
+        halo, all_parts = import_kitbash_asset("Mech_Halo_01.blend")
 
-    # Inner ring
-    bpy.ops.mesh.primitive_torus_add(
-        major_radius=0.30,
-        minor_radius=0.010,
-        major_segments=24,
-        minor_segments=8,
-        location=(0, 0.10, 1.90)
-    )
-    ring_inner = bpy.context.active_object
-    ring_inner.name = "Halo_Ring_Inner"
-    ring_inner.rotation_euler = (math.radians(20), 0, math.radians(30))
+        # Join all parts into single object
+        if len(all_parts) > 1:
+            bpy.ops.object.select_all(action='DESELECT')
+            for obj in all_parts:
+                if obj.type == 'MESH':
+                    obj.select_set(True)
+            bpy.context.view_layer.objects.active = halo
+            bpy.ops.object.join()
 
-    # Outer ring
-    bpy.ops.mesh.primitive_torus_add(
-        major_radius=0.50,
-        minor_radius=0.012,
-        major_segments=40,
-        minor_segments=10,
-        location=(0, 0.10, 1.90)
-    )
-    ring_outer = bpy.context.active_object
-    ring_outer.name = "Halo_Ring_Outer"
-    ring_outer.rotation_euler = (math.radians(10), 0, math.radians(-20))
+        # Position above head
+        halo.location = (0, 0.10, 1.90)
+        halo.rotation_euler = (math.radians(15), 0, 0)
 
-    # Add amber glow spheres
-    for i in range(6):
-        angle = (i / 6.0) * 2 * math.pi
-        x = 0.35 * math.cos(angle)
-        y = 0.10 + 0.35 * math.sin(angle)
+        # Parent to base mesh (will follow head bone in rigging)
+        halo.parent = base_mesh
 
-        bpy.ops.mesh.primitive_uv_sphere_add(
-            segments=8,
-            ring_count=6,
-            radius=0.025,
-            location=(x, y, 1.90)
-        )
-        glow = bpy.context.active_object
-        glow.name = f"Halo_Glow_{i}"
+        print(f"    ✓ Halo attached ({len(halo.data.vertices)} verts)")
+        return [halo]
 
-    # Parent to base mesh
-    for obj in [ring_main, ring_inner, ring_outer]:
-        obj.parent = base_mesh
-
-    return [ring_main, ring_inner, ring_outer]
+    except FileNotFoundError:
+        print("  ⚠ Halo asset not found, skipping...")
+        return []
 
 def add_blade_hands(base_mesh):
-    """Replace hand stubs with fused blade-hands"""
-    print("Creating blade-hands...")
+    """Import and attach pre-modeled blade hands"""
+    print("Creating blade-hands (kitbash import)...")
+
+    blade_hands = []
 
     for side in ['L', 'R']:
         sign = 1 if side == 'L' else -1
 
-        # Find and hide original hand
-        for obj in bpy.data.objects:
-            if f"Hand_{side}" in obj.name:
-                obj.hide_render = True
-                obj.hide_viewport = True
+        try:
+            blade, all_parts = import_kitbash_asset(f"BladeHand_{side}.blend")
 
-        # Create blade hand
-        bpy.ops.mesh.primitive_cone_add(
-            vertices=6,
-            radius1=0.06,
-            radius2=0.005,
-            depth=0.25,
-            location=(sign * 0.52, 0.40, 0.70),
-            rotation=(math.radians(-30), 0, math.radians(sign * 10))
-        )
-        blade = bpy.context.active_object
-        blade.name = f"Hand_Blade_{side}"
+            # Join all parts if multiple
+            if len(all_parts) > 1:
+                bpy.ops.object.select_all(action='DESELECT')
+                for obj in all_parts:
+                    if obj.type == 'MESH':
+                        obj.select_set(True)
+                bpy.context.view_layer.objects.active = blade
+                bpy.ops.object.join()
 
-        # Add sharp edge
-        bevel = blade.modifiers.new(name="Bevel", type='BEVEL')
-        bevel.width = 0.002
-        bevel.segments = 2
+            # Position at wrist
+            blade.location = (sign * 0.18, 0.45, 0.70)
+            blade.rotation_euler = (math.radians(-20), 0, math.radians(sign * 5))
 
-        blade.parent = base_mesh
+            # Parent to base mesh
+            blade.parent = base_mesh
+
+            blade_hands.append(blade)
+            print(f"    ✓ Blade hand {side} attached ({len(blade.data.vertices)} verts)")
+
+        except FileNotFoundError:
+            print(f"  ⚠ Blade hand {side} asset not found, skipping...")
+
+    return blade_hands
+
+def add_cable_clusters(base_mesh):
+    """Import and attach cable clusters connecting shoulder to back"""
+    print("Adding cable clusters (kitbash import)...")
+
+    try:
+        cables, all_parts = import_kitbash_asset("CableCluster_01.blend")
+
+        # Join all cable strands
+        if len(all_parts) > 1:
+            bpy.ops.object.select_all(action='DESELECT')
+            for obj in all_parts:
+                if obj.type == 'MESH':
+                    obj.select_set(True)
+            bpy.context.view_layer.objects.active = cables
+            bpy.ops.object.join()
+
+        # Position to connect shoulder to back
+        cables.location = (0, 0, 1.05)
+
+        # Parent to base mesh
+        cables.parent = base_mesh
+
+        print(f"    ✓ Cable cluster attached ({len(cables.data.vertices)} verts)")
+        return [cables]
+
+    except FileNotFoundError:
+        print("  ⚠ Cable cluster asset not found, skipping...")
+        return []
 
 # ============================================================================
 # RIGGING
@@ -564,8 +570,8 @@ def main():
     import sys
 
     print("=" * 60)
-    print("THE PENITENT MECHANISM - Avatar Generator V3.0")
-    print("Architecture: Base Mesh + Kitbashing (NOT primitive stacking)")
+    print("THE PENITENT MECHANISM - Avatar Generator V4.0")
+    print("Architecture: Skin Modifier base + kitbashed mechanical assets")
     print("=" * 60)
     print(f"Blender: {bpy.app.version_string}")
     print(f"Python: {sys.version}")
@@ -622,11 +628,22 @@ def main():
 
         # STEP 7: Add blade hands
         print("STEP 7: Creating blade-hands...")
-        add_blade_hands(basemesh)
+        blade_parts = add_blade_hands(basemesh)
+        for part in blade_parts:
+            if not part.data.materials:
+                part.data.materials.append(mat_bronze)
         print()
 
-        # STEP 8: Setup rigging
-        print("STEP 8: Setting up rigging...")
+        # STEP 8: Add cable clusters
+        print("STEP 8: Adding cable clusters...")
+        cable_parts = add_cable_clusters(basemesh)
+        for part in cable_parts:
+            if not part.data.materials:
+                part.data.materials.append(mat_bronze)
+        print()
+
+        # STEP 9: Setup rigging
+        print("STEP 9: Setting up rigging...")
         metarig = create_rigify_metarig()
         rig = generate_rigify_rig(metarig)
 
@@ -637,7 +654,7 @@ def main():
             apply_automatic_weights(mesh_objects, rig)
         print()
 
-        # STEP 9: Final statistics
+        # STEP 10: Final statistics
         print("=" * 60)
         print("SCENE STATISTICS")
         print("=" * 60)
@@ -656,14 +673,14 @@ def main():
         print("=" * 60)
         print()
 
-        # STEP 10: Save
+        # STEP 11: Save
         print(f"Saving to: {OUTPUT_PATH}")
         bpy.ops.wm.save_as_mainfile(filepath=OUTPUT_PATH)
         print("✓ File saved!")
         print()
 
         print("=" * 60)
-        print("✓ AVATAR GENERATION COMPLETE (V3 ARCHITECTURE)!")
+        print("✓ AVATAR GENERATION COMPLETE (V4 ARCHITECTURE)!")
         print("=" * 60)
 
     except Exception as e:

@@ -1,15 +1,16 @@
 #!/usr/bin/env python3
 """
-Base Mesh Generator for The Penitent Mechanism
+Base Mesh Generator for The Penitent Mechanism - V4.0
+Professional character topology using Skin Modifier technique
 
-Creates a proper humanoid base mesh with good topology in a kneeling pose.
-This is saved as a reusable asset that generate_avatar.py will import and modify.
+ARCHITECTURE:
+- Creates skeletal edge structure (like bones)
+- Applies Skin Modifier to generate clean quad topology
+- Results in proper humanoid mesh suitable for rigging and deformation
+- Kneeling pose baked into the geometry
 
-Key principles:
-- Proper quad-based topology with edge loops
-- Kneeling pose baked into the mesh
-- Statue-like aesthetic (geometric, not too organic)
-- Optimized for subdivision and modification
+This approach is used in professional character pipelines and produces
+vastly superior topology compared to primitive stacking.
 """
 
 import bpy
@@ -24,265 +25,239 @@ def clear_scene():
     bpy.ops.object.select_all(action='SELECT')
     bpy.ops.object.delete(use_global=False)
 
-def create_torso_base():
-    """Create torso with proper topology"""
-    bpy.ops.mesh.primitive_cube_add(size=1, location=(0, 0, 0.9))
-    torso = bpy.context.active_object
-    torso.name = "Torso"
+    # Clear orphan data
+    for block in bpy.data.meshes:
+        if block.users == 0:
+            bpy.data.meshes.remove(block)
 
-    # Scale to body proportions
-    torso.scale = (0.35, 0.25, 0.5)
-    bpy.ops.object.transform_apply(scale=True)
+def create_skeleton_mesh():
+    """
+    Create edge-based skeleton that will be converted to mesh via Skin Modifier.
+    This is the professional way to generate organic character topology.
+    """
+    mesh = bpy.data.meshes.new("Skeleton")
+    obj = bpy.data.objects.new("Skeleton", mesh)
+    bpy.context.collection.objects.link(obj)
+    bpy.context.view_layer.objects.active = obj
 
-    # Enter edit mode and add subdivision
+    bm = bmesh.new()
+
+    # Define skeleton points in kneeling pose
+    # Format: (name, location, radius_scale)
+    skeleton_points = [
+        # Spine (bottom to top)
+        ('pelvis', Vector((0, 0, 0.50)), 1.2),
+        ('spine_low', Vector((0, 0, 0.65)), 1.0),
+        ('spine_mid', Vector((0, 0, 0.85)), 0.95),
+        ('spine_high', Vector((0, 0, 1.05)), 0.90),
+        ('chest', Vector((0, 0, 1.20)), 1.0),
+
+        # Neck and head
+        ('neck_base', Vector((0, 0, 1.35)), 0.4),
+        ('neck_top', Vector((0, 0, 1.50)), 0.4),
+        ('head_base', Vector((0, 0.02, 1.60)), 0.7),
+        ('head_top', Vector((0, 0.05, 1.85)), 0.6),
+
+        # Left leg (kneeling)
+        ('hip_L', Vector((0.12, 0, 0.50)), 0.5),
+        ('knee_L', Vector((0.14, 0.25, 0.30)), 0.35),
+        ('ankle_L', Vector((0.14, 0.30, 0.08)), 0.25),
+        ('toe_L', Vector((0.14, 0.45, 0.05)), 0.2),
+
+        # Right leg (kneeling)
+        ('hip_R', Vector((-0.12, 0, 0.50)), 0.5),
+        ('knee_R', Vector((-0.14, 0.25, 0.30)), 0.35),
+        ('ankle_R', Vector((-0.14, 0.30, 0.08)), 0.25),
+        ('toe_R', Vector((-0.14, 0.45, 0.05)), 0.2),
+
+        # Left arm (prayer-like pose)
+        ('shoulder_L', Vector((0.22, 0, 1.20)), 0.35),
+        ('elbow_L', Vector((0.32, 0.15, 0.95)), 0.28),
+        ('wrist_L', Vector((0.25, 0.35, 0.75)), 0.22),
+        ('hand_L', Vector((0.18, 0.45, 0.70)), 0.18),
+
+        # Right arm (prayer-like pose)
+        ('shoulder_R', Vector((-0.22, 0, 1.20)), 0.35),
+        ('elbow_R', Vector((-0.32, 0.15, 0.95)), 0.28),
+        ('wrist_R', Vector((-0.25, 0.35, 0.75)), 0.22),
+        ('hand_R', Vector((-0.18, 0.45, 0.70)), 0.18),
+    ]
+
+    # Create vertices
+    verts = {}
+    for name, loc, radius in skeleton_points:
+        v = bm.verts.new(loc)
+        verts[name] = (v, radius)
+
+    # Create edges (connections) - this defines the skeleton structure
+    connections = [
+        # Spine chain
+        ('pelvis', 'spine_low'),
+        ('spine_low', 'spine_mid'),
+        ('spine_mid', 'spine_high'),
+        ('spine_high', 'chest'),
+        ('chest', 'neck_base'),
+        ('neck_base', 'neck_top'),
+        ('neck_top', 'head_base'),
+        ('head_base', 'head_top'),
+
+        # Left leg chain
+        ('pelvis', 'hip_L'),
+        ('hip_L', 'knee_L'),
+        ('knee_L', 'ankle_L'),
+        ('ankle_L', 'toe_L'),
+
+        # Right leg chain
+        ('pelvis', 'hip_R'),
+        ('hip_R', 'knee_R'),
+        ('knee_R', 'ankle_R'),
+        ('ankle_R', 'toe_R'),
+
+        # Left arm chain
+        ('chest', 'shoulder_L'),
+        ('shoulder_L', 'elbow_L'),
+        ('elbow_L', 'wrist_L'),
+        ('wrist_L', 'hand_L'),
+
+        # Right arm chain
+        ('chest', 'shoulder_R'),
+        ('shoulder_R', 'elbow_R'),
+        ('elbow_R', 'wrist_R'),
+        ('wrist_R', 'hand_R'),
+    ]
+
+    for start_name, end_name in connections:
+        start_v = verts[start_name][0]
+        end_v = verts[end_name][0]
+        bm.edges.new([start_v, end_v])
+
+    bm.to_mesh(mesh)
+    bm.free()
+
+    # Apply Skin Modifier - this is the magic that creates proper topology
+    skin_mod = obj.modifiers.new(name="Skin", type='SKIN')
+
+    # Set individual vertex radii for proper proportions
     bpy.ops.object.mode_set(mode='EDIT')
-    bpy.ops.mesh.select_all(action='SELECT')
+    bm = bmesh.from_edit_mesh(mesh)
 
-    # Subdivide multiple times to create edge loops
-    # This replaces loopcut_slide which doesn't work in headless mode
-    bpy.ops.mesh.subdivide(number_cuts=1)  # First subdivision
-    bpy.ops.mesh.subdivide(number_cuts=1)  # Second subdivision for more topology
+    skin_layer = bm.verts.layers.skin.verify()
 
+    for v in bm.verts:
+        # Find matching named vertex
+        for name, (vert, radius) in verts.items():
+            if v.index == vert.index:
+                v[skin_layer].radius = (radius * 0.08, radius * 0.08)
+                break
+
+    bmesh.update_edit_mesh(mesh)
     bpy.ops.object.mode_set(mode='OBJECT')
 
-    # Add subdivision surface modifier
-    subsurf = torso.modifiers.new(name="Subdivision", type='SUBSURF')
+    return obj
+
+def refine_basemesh(obj):
+    """
+    Apply modifiers and refine the generated mesh.
+    """
+    print("Applying Skin Modifier...")
+
+    # Apply skin modifier to generate the mesh
+    bpy.context.view_layer.objects.active = obj
+    bpy.ops.object.modifier_apply(modifier="Skin")
+
+    # Add Subdivision Surface for smoothness
+    print("Adding subdivision surface...")
+    subsurf = obj.modifiers.new(name="Subdivision", type='SUBSURF')
     subsurf.levels = 2
-    subsurf.render_levels = 3
+    subsurf.render_levels = 2
+    subsurf.subdivision_type = 'CATMULL_CLARK'
 
-    return torso
-
-def create_head_neck():
-    """Create head and neck as single mesh"""
-    # Neck cylinder
-    bpy.ops.mesh.primitive_cylinder_add(
-        vertices=16,
-        radius=0.12,
-        depth=0.25,
-        location=(0, 0, 1.45)
-    )
-    neck_head = bpy.context.active_object
-    neck_head.name = "HeadNeck"
-
-    bpy.ops.object.mode_set(mode='EDIT')
-    bm = bmesh.from_edit_mesh(neck_head.data)
-
-    # Extrude top to create head
-    top_verts = [v for v in bm.verts if v.co.z > 1.5]
-    for v in top_verts:
-        v.select = True
-
-    bpy.ops.mesh.extrude_region_move(
-        TRANSFORM_OT_translate={"value": (0, 0, 0.3)}
-    )
-
-    # Scale head
-    bpy.ops.transform.resize(value=(1.8, 1.4, 1.2))
-
-    bmesh.update_edit_mesh(neck_head.data)
-    bpy.ops.object.mode_set(mode='OBJECT')
-
-    # Subdivision
-    subsurf = neck_head.modifiers.new(name="Subdivision", type='SUBSURF')
-    subsurf.levels = 2
-    subsurf.render_levels = 3
-
-    return neck_head
-
-def create_arm(side='L'):
-    """Create arm with proper joint topology"""
-    sign = 1 if side == 'L' else -1
-
-    # Upper arm
-    bpy.ops.mesh.primitive_cylinder_add(
-        vertices=12,
-        radius=0.08,
-        depth=0.35,
-        location=(sign * 0.45, 0, 1.15),
-        rotation=(0, math.radians(15 * sign), 0)
-    )
-    arm = bpy.context.active_object
-    arm.name = f"Arm_{side}"
-
-    bpy.ops.object.mode_set(mode='EDIT')
-    bpy.ops.mesh.subdivide(number_cuts=2)
-    bpy.ops.object.mode_set(mode='OBJECT')
-
-    # Forearm
-    bpy.ops.mesh.primitive_cylinder_add(
-        vertices=12,
-        radius=0.07,
-        depth=0.30,
-        location=(sign * 0.50, 0.15, 0.85),
-        rotation=(math.radians(-30), 0, 0)
-    )
-    forearm = bpy.context.active_object
-    forearm.name = f"Forearm_{side}"
-
-    bpy.ops.object.mode_set(mode='EDIT')
-    bpy.ops.mesh.subdivide(number_cuts=2)
-    bpy.ops.object.mode_set(mode='OBJECT')
-
-    # Hand stub (will be replaced with blade hands later)
-    bpy.ops.mesh.primitive_cylinder_add(
-        vertices=8,
-        radius=0.06,
-        depth=0.15,
-        location=(sign * 0.52, 0.35, 0.75),
-        rotation=(math.radians(-45), 0, 0)
-    )
-    hand = bpy.context.active_object
-    hand.name = f"Hand_{side}"
-
-    # Join arm parts
-    bpy.ops.object.select_all(action='DESELECT')
-    arm.select_set(True)
-    forearm.select_set(True)
-    hand.select_set(True)
-    bpy.context.view_layer.objects.active = arm
-    bpy.ops.object.join()
-
-    # Subdivision
-    subsurf = arm.modifiers.new(name="Subdivision", type='SUBSURF')
-    subsurf.levels = 2
-    subsurf.render_levels = 3
-
-    return arm
-
-def create_leg(side='L'):
-    """Create kneeling leg with proper topology"""
-    sign = 1 if side == 'L' else -1
-
-    # Thigh (angled for kneeling)
-    bpy.ops.mesh.primitive_cylinder_add(
-        vertices=16,
-        radius=0.11,
-        depth=0.45,
-        location=(sign * 0.15, -0.05, 0.70),
-        rotation=(math.radians(-60), 0, 0)
-    )
-    leg = bpy.context.active_object
-    leg.name = f"Leg_{side}"
-
-    bpy.ops.object.mode_set(mode='EDIT')
-    bpy.ops.mesh.subdivide(number_cuts=3)
-    bpy.ops.object.mode_set(mode='OBJECT')
-
-    # Shin (vertical, kneeling)
-    bpy.ops.mesh.primitive_cylinder_add(
-        vertices=16,
-        radius=0.09,
-        depth=0.40,
-        location=(sign * 0.15, 0.15, 0.25)
-    )
-    shin = bpy.context.active_object
-    shin.name = f"Shin_{side}"
-
-    bpy.ops.object.mode_set(mode='EDIT')
-    bpy.ops.mesh.subdivide(number_cuts=3)
-    bpy.ops.object.mode_set(mode='OBJECT')
-
-    # Foot (flat on ground)
-    bpy.ops.mesh.primitive_cube_add(
-        size=0.18,
-        location=(sign * 0.15, 0.22, 0.05)
-    )
-    foot = bpy.context.active_object
-    foot.name = f"Foot_{side}"
-    foot.scale = (0.8, 1.5, 0.5)
-    bpy.ops.object.transform_apply(scale=True)
-
-    # Join leg parts
-    bpy.ops.object.select_all(action='DESELECT')
-    leg.select_set(True)
-    shin.select_set(True)
-    foot.select_set(True)
-    bpy.context.view_layer.objects.active = leg
-    bpy.ops.object.join()
-
-    # Subdivision
-    subsurf = leg.modifiers.new(name="Subdivision", type='SUBSURF')
-    subsurf.levels = 2
-    subsurf.render_levels = 3
-
-    return leg
-
-def merge_basemesh(parts):
-    """Merge all body parts into single mesh with proper topology"""
-    bpy.ops.object.select_all(action='DESELECT')
-
-    for part in parts:
-        part.select_set(True)
-
-    bpy.context.view_layer.objects.active = parts[0]
-    bpy.ops.object.join()
-
-    basemesh = bpy.context.active_object
-    basemesh.name = "PenitentMechanism_Base"
-
-    # Apply all modifiers
-    bpy.ops.object.mode_set(mode='OBJECT')
-    for modifier in basemesh.modifiers:
-        bpy.ops.object.modifier_apply(modifier=modifier.name)
+    # Apply subdivision to get final topology
+    bpy.ops.object.modifier_apply(modifier="Subdivision")
 
     # Clean up geometry
+    print("Cleaning up geometry...")
     bpy.ops.object.mode_set(mode='EDIT')
     bpy.ops.mesh.select_all(action='SELECT')
     bpy.ops.mesh.remove_doubles(threshold=0.001)
     bpy.ops.mesh.normals_make_consistent(inside=False)
+    bpy.ops.mesh.delete_loose()
     bpy.ops.object.mode_set(mode='OBJECT')
 
-    # Final subdivision modifier (leave unapplied for flexibility)
-    subsurf = basemesh.modifiers.new(name="Subdivision", type='SUBSURF')
-    subsurf.levels = 1
-    subsurf.render_levels = 2
+    # Add one more subdivision modifier (leave unapplied for flexibility)
+    final_subsurf = obj.modifiers.new(name="Subdivision_Final", type='SUBSURF')
+    final_subsurf.levels = 1
+    final_subsurf.render_levels = 2
 
     # Smooth shading
     bpy.ops.object.shade_smooth()
-    basemesh.data.use_auto_smooth = True
-    basemesh.data.auto_smooth_angle = math.radians(30)
+    obj.data.use_auto_smooth = True
+    obj.data.auto_smooth_angle = math.radians(30)
 
-    return basemesh
+    return obj
+
+def add_facial_features(obj):
+    """
+    Add minimal facial features for the bronze mask aesthetic.
+    Featureless except for almond-shaped eye cutouts.
+    """
+    print("Adding facial features...")
+
+    bpy.context.view_layer.objects.active = obj
+    bpy.ops.object.mode_set(mode='EDIT')
+    bm = bmesh.from_edit_mesh(obj.data)
+
+    # Find head vertices (z > 1.6)
+    head_verts = [v for v in bm.verts if v.co.z > 1.6 and v.co.z < 1.80]
+
+    if head_verts:
+        # Select front-facing vertices for eyes
+        for v in head_verts:
+            if v.co.y > 0.05 and abs(v.co.x) > 0.08 and abs(v.co.x) < 0.15:
+                # Create slight indentation for eye sockets
+                v.co.y += 0.015
+
+    bmesh.update_edit_mesh(obj.data)
+    bpy.ops.object.mode_set(mode='OBJECT')
 
 def main():
-    """Generate and save base mesh"""
-    print("=" * 60)
-    print("BASE MESH GENERATOR - The Penitent Mechanism")
-    print("=" * 60)
+    """Generate professional-quality base mesh using Skin Modifier"""
+    print("=" * 70)
+    print("BASE MESH GENERATOR V4.0 - The Penitent Mechanism")
+    print("Using professional Skin Modifier technique")
+    print("=" * 70)
 
-    print("\nClearing scene...")
+    print("\n[1/5] Clearing scene...")
     clear_scene()
 
-    print("Creating torso...")
-    torso = create_torso_base()
+    print("[2/5] Creating skeleton structure...")
+    skeleton = create_skeleton_mesh()
+    print(f"  ✓ Created skeleton with {len(skeleton.data.vertices)} control points")
 
-    print("Creating head and neck...")
-    head_neck = create_head_neck()
+    print("[3/5] Applying Skin Modifier and subdivision...")
+    basemesh = refine_basemesh(skeleton)
+    print(f"  ✓ Generated mesh with {len(basemesh.data.vertices)} vertices")
 
-    print("Creating arms...")
-    arm_l = create_arm('L')
-    arm_r = create_arm('R')
+    print("[4/5] Adding facial features...")
+    add_facial_features(basemesh)
 
-    print("Creating legs (kneeling pose)...")
-    leg_l = create_leg('L')
-    leg_r = create_leg('R')
-
-    print("\nMerging into single base mesh...")
-    parts = [torso, head_neck, arm_l, arm_r, leg_l, leg_r]
-    basemesh = merge_basemesh(parts)
+    print("[5/5] Finalizing base mesh...")
+    basemesh.name = "PenitentMechanism_Base"
 
     print(f"\n✓ Base mesh created:")
     print(f"  Name: {basemesh.name}")
     print(f"  Vertices: {len(basemesh.data.vertices)}")
     print(f"  Faces: {len(basemesh.data.polygons)}")
+    print(f"  Topology: Clean quads from Skin Modifier")
 
     print(f"\nSaving to: {OUTPUT_PATH}")
     bpy.ops.wm.save_as_mainfile(filepath=OUTPUT_PATH)
     print("✓ Base mesh saved!")
 
-    print("\n" + "=" * 60)
+    print("\n" + "=" * 70)
     print("✓ BASE MESH GENERATION COMPLETE!")
-    print("=" * 60)
+    print("Professional character topology ready for kitbashing.")
+    print("=" * 70)
 
 if __name__ == "__main__":
     main()
