@@ -59,17 +59,17 @@ jobs:
           /opt/blender/blender --version
 
       #########################################
-      # STEP 3a: Generate Base Mesh (V3 Architecture)
+      # STEP 3a: Generate Base Mesh (V4 Architecture)
       #########################################
       - name: Generate Base Mesh
         run: |
-          echo "Generating base mesh for The Penitent Mechanism (V3 Architecture)..."
+          echo "Generating base mesh for The Penitent Mechanism (V4 Architecture - Skin Modifier)..."
 
           # Ensure base mesh directory exists
           mkdir -p Avatar/BaseMeshes
 
-          # Generate base mesh first
-          /opt/blender/blender --background --enable-autoexec --python scripts/blender/generate_basemesh.py 2>&1 | tee blender_basemesh.log
+          # Generate base mesh first using V4 generator
+          /opt/blender/blender --background --enable-autoexec --python scripts/blender/generate_basemesh_v4.py 2>&1 | tee blender_basemesh.log
 
           # Check if base mesh was created
           if [ ! -f "Avatar/BaseMeshes/PenitentMechanism_Base.blend" ]; then
@@ -82,17 +82,39 @@ jobs:
           ls -lh Avatar/BaseMeshes/
 
       #########################################
-      # STEP 3b: Generate Avatar Model (V3 - Kitbashing)
+      # STEP 3b: Generate Kitbash Assets (V4 - Pre-modeled Parts)
+      #########################################
+      - name: Generate Kitbash Assets
+        run: |
+          echo "Generating kitbash assets (mechanical parts)..."
+
+          # Ensure kitbash directory exists
+          mkdir -p Avatar/Kitbash
+
+          # Generate all kitbash assets
+          /opt/blender/blender --background --enable-autoexec --python scripts/blender/generate_kitbash_assets.py 2>&1 | tee blender_kitbash.log
+
+          # Check if assets were created
+          if [ ! -f "Avatar/Kitbash/Mech_Halo_01.blend" ]; then
+            echo "WARNING: Some kitbash assets may not have been created"
+            cat blender_kitbash.log
+          else
+            echo "Kitbash assets generated successfully!"
+            ls -lh Avatar/Kitbash/
+          fi
+
+      #########################################
+      # STEP 3c: Generate Avatar Model (V4 - TRUE Kitbashing)
       #########################################
       - name: Generate Avatar Model
         run: |
-          echo "Generating The Penitent Mechanism avatar (V3 - Base Mesh + Kitbashing)..."
+          echo "Generating The Penitent Mechanism avatar (V4 - TRUE Kitbashing)..."
 
           # Ensure output directories exist
           mkdir -p Avatar/Textures Avatar/Animations Avatar/Materials Avatar/Prefabs
 
-          # Run V3 generator (imports base mesh, adds mechanical details)
-          /opt/blender/blender --background --enable-autoexec --python scripts/blender/generate_avatar_v3.py 2>&1 | tee blender_generate.log
+          # Run V4 generator (imports base mesh + kitbash assets)
+          /opt/blender/blender --background --enable-autoexec --python scripts/blender/generate_avatar_v4.py 2>&1 | tee blender_generate.log
 
           # Check if blend file was created
           if [ ! -f "Avatar/ForgottenArchitect.blend" ]; then
@@ -101,7 +123,7 @@ jobs:
             exit 1
           fi
 
-          echo "Avatar model generated successfully (V3)!"
+          echo "Avatar model generated successfully (V4 - TRUE KITBASHING)!"
 
       #########################################
       # STEP 4: Bake Textures (Optimized)
@@ -245,9 +267,12 @@ jobs:
           if git diff --cached --quiet; then
             echo "No changes to commit"
           else
-            git commit -m "🤖 Auto-generated: The Forgotten Architect avatar build
+            git commit -m "🤖 Auto-generated: The Penitent Mechanism avatar build (V4)
 
-            - Generated 3D model procedurally
+            Architecture V4.0 - TRUE KITBASHING:
+            - High-quality base mesh (Skin modifier, proper topology)
+            - Pre-modeled kitbash assets (halo, shoulder, blade hands)
+            - TRUE asset import workflow (NO primitive snowman!)
             - Baked PBR textures
             - Created horror animations
             - Exported to FBX
@@ -293,10 +318,15 @@ jobs:
       - name: Build Summary
         if: success()
         run: |
-          echo "## 🎭 The Forgotten Architect - Build Complete! 🎭" >> $GITHUB_STEP_SUMMARY
+          echo "## 🎭 The Penitent Mechanism - Build Complete! 🎭" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Architecture V4.0 - TRUE KITBASHING" >> $GITHUB_STEP_SUMMARY
+          echo "- High-quality base mesh (Skin modifier technique)" >> $GITHUB_STEP_SUMMARY
+          echo "- Pre-modeled kitbash assets (halo, shoulder, blade hands, cables)" >> $GITHUB_STEP_SUMMARY
+          echo "- NO primitive snowman stacking!" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### Generated Assets:" >> $GITHUB_STEP_SUMMARY
-          echo "- ✅ 3D Model (procedurally generated)" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ 3D Model (base mesh + kitbashing)" >> $GITHUB_STEP_SUMMARY
           echo "- ✅ PBR Textures (baked)" >> $GITHUB_STEP_SUMMARY
           echo "- ✅ Horror Animations (3 emotes + idle)" >> $GITHUB_STEP_SUMMARY
           echo "- ✅ FBX Export (Unity-ready)" >> $GITHUB_STEP_SUMMARY
