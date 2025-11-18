@@ -27,6 +27,109 @@ OUTPUT_PATH = os.path.abspath("Avatar/ForgottenArchitect.blend")
 KNEELING_HEIGHT = 1.8  # meters
 STANDING_HEIGHT = 2.4  # meters
 
+# ============================================================================
+# ARMATURE/BONE UTILITIES
+# ============================================================================
+
+def find_armature():
+    """Find the armature in the scene"""
+    for obj in bpy.data.objects:
+        if obj.type == 'ARMATURE':
+            return obj
+    return None
+
+def get_bone_world_position(armature, bone_name):
+    """Get world position of a bone's head"""
+    if armature is None:
+        return None
+
+    # Try exact match first
+    if bone_name in armature.data.bones:
+        bone = armature.data.bones[bone_name]
+        return armature.matrix_world @ bone.head_local
+
+    # Try common variations
+    variations = [
+        bone_name,
+        bone_name.replace('.', '_'),
+        bone_name.lower(),
+        bone_name.upper(),
+        f"DEF-{bone_name}",
+        f"ORG-{bone_name}",
+    ]
+
+    for var in variations:
+        if var in armature.data.bones:
+            bone = armature.data.bones[var]
+            return armature.matrix_world @ bone.head_local
+
+    return None
+
+def get_bone_world_tail(armature, bone_name):
+    """Get world position of a bone's tail"""
+    if armature is None:
+        return None
+
+    if bone_name in armature.data.bones:
+        bone = armature.data.bones[bone_name]
+        return armature.matrix_world @ bone.tail_local
+
+    return None
+
+def find_bone_by_pattern(armature, patterns):
+    """Find a bone matching any of the given patterns"""
+    if armature is None:
+        return None, None
+
+    for bone in armature.data.bones:
+        bone_lower = bone.name.lower()
+        for pattern in patterns:
+            if pattern.lower() in bone_lower:
+                pos = armature.matrix_world @ bone.head_local
+                return bone.name, pos
+
+    return None, None
+
+def parent_to_bone(obj, armature, bone_name):
+    """Parent object to a specific bone"""
+    if armature is None:
+        print(f"    ⚠ No armature found, cannot parent {obj.name} to bone")
+        return False
+
+    # Find bone
+    actual_bone_name = None
+    for bone in armature.data.bones:
+        if bone_name.lower() in bone.name.lower():
+            actual_bone_name = bone.name
+            break
+
+    if actual_bone_name is None:
+        print(f"    ⚠ Bone '{bone_name}' not found, parenting to armature object")
+        obj.parent = armature
+        return False
+
+    # Parent to bone
+    obj.parent = armature
+    obj.parent_type = 'BONE'
+    obj.parent_bone = actual_bone_name
+
+    print(f"    ✓ Parented {obj.name} to bone '{actual_bone_name}'")
+    return True
+
+def get_mesh_bounds(obj):
+    """Get world-space bounding box of a mesh"""
+    if obj.type != 'MESH':
+        return None, None
+
+    # Get world-space bounds
+    bbox = [obj.matrix_world @ Vector(corner) for corner in obj.bound_box]
+
+    min_z = min(v.z for v in bbox)
+    max_z = max(v.z for v in bbox)
+    center = sum(bbox, Vector()) / 8
+
+    return center, (min_z, max_z)
+
 def clear_scene():
     """Clear default scene objects"""
     bpy.ops.object.select_all(action='SELECT')
@@ -380,8 +483,8 @@ def add_surface_weathering(obj):
 # MECHANICAL KITBASH (import pre-modeled assets)
 # ============================================================================
 
-def add_shoulder_mechanism(base_mesh):
-    """Import and attach pre-modeled shoulder mechanism (right side)"""
+def add_shoulder_mechanism(base_mesh, armature):
+    """Import and attach pre-modeled shoulder mechanism to shoulder bone"""
     print("Adding shoulder mechanism (kitbash import)...")
 
     try:
@@ -396,12 +499,29 @@ def add_shoulder_mechanism(base_mesh):
             bpy.context.view_layer.objects.active = shoulder
             bpy.ops.object.join()
 
-        # Position on right shoulder
-        shoulder.location = (0.22, -0.05, 1.20)
+        # Find shoulder bone position
+        shoulder_bone, shoulder_pos = find_bone_by_pattern(armature, ['shoulder', 'clavicle', 'upper_arm'])
+
+        if shoulder_pos:
+            # Position relative to bone
+            shoulder.location = shoulder_pos + Vector((0.08, -0.05, 0.05))
+            print(f"    Positioned at bone '{shoulder_bone}': {shoulder.location}")
+        else:
+            # Fallback: use mesh bounds
+            center, (min_z, max_z) = get_mesh_bounds(base_mesh)
+            if center:
+                shoulder.location = (center.x + 0.20, center.y - 0.05, max_z * 0.75)
+            else:
+                shoulder.location = (0.22, -0.05, 1.20)
+            print(f"    Using fallback position: {shoulder.location}")
+
         shoulder.rotation_euler = (0, 0, math.radians(-10))
 
-        # Parent to base mesh
-        shoulder.parent = base_mesh
+        # Parent to shoulder bone
+        if armature and shoulder_bone:
+            parent_to_bone(shoulder, armature, shoulder_bone)
+        else:
+            shoulder.parent = base_mesh
 
         print(f"    ✓ Shoulder mechanism attached ({len(shoulder.data.vertices)} verts)")
         return [shoulder]
@@ -410,8 +530,8 @@ def add_shoulder_mechanism(base_mesh):
         print("  ⚠ Shoulder asset not found, skipping...")
         return []
 
-def add_mechanical_halo(base_mesh):
-    """Import and attach pre-modeled mechanical halo"""
+def add_mechanical_halo(base_mesh, armature):
+    """Import and attach pre-modeled mechanical halo to head bone"""
     print("Creating mechanical halo (kitbash import)...")
 
     try:
@@ -426,12 +546,29 @@ def add_mechanical_halo(base_mesh):
             bpy.context.view_layer.objects.active = halo
             bpy.ops.object.join()
 
-        # Position above head
-        halo.location = (0, 0.10, 1.90)
+        # Find head bone position
+        head_bone, head_pos = find_bone_by_pattern(armature, ['head', 'skull'])
+
+        if head_pos:
+            # Position above head bone (halo floats above)
+            halo.location = head_pos + Vector((0, 0.05, 0.25))
+            print(f"    Positioned above bone '{head_bone}': {halo.location}")
+        else:
+            # Fallback: use mesh bounds
+            center, (min_z, max_z) = get_mesh_bounds(base_mesh)
+            if center:
+                halo.location = (center.x, center.y + 0.05, max_z + 0.15)
+            else:
+                halo.location = (0, 0.10, 1.90)
+            print(f"    Using fallback position: {halo.location}")
+
         halo.rotation_euler = (math.radians(15), 0, 0)
 
-        # Parent to base mesh (will follow head bone in rigging)
-        halo.parent = base_mesh
+        # Parent to head bone
+        if armature and head_bone:
+            parent_to_bone(halo, armature, head_bone)
+        else:
+            halo.parent = base_mesh
 
         print(f"    ✓ Halo attached ({len(halo.data.vertices)} verts)")
         return [halo]
@@ -440,8 +577,8 @@ def add_mechanical_halo(base_mesh):
         print("  ⚠ Halo asset not found, skipping...")
         return []
 
-def add_blade_hands(base_mesh):
-    """Import and attach pre-modeled blade hands"""
+def add_blade_hands(base_mesh, armature):
+    """Import and attach pre-modeled blade hands to hand bones"""
     print("Creating blade-hands (kitbash import)...")
 
     blade_hands = []
@@ -461,12 +598,30 @@ def add_blade_hands(base_mesh):
                 bpy.context.view_layer.objects.active = blade
                 bpy.ops.object.join()
 
-            # Position at wrist
-            blade.location = (sign * 0.18, 0.45, 0.70)
+            # Find hand bone position
+            hand_patterns = [f'hand.{side}', f'hand_{side}', f'wrist.{side}', f'wrist_{side}']
+            hand_bone, hand_pos = find_bone_by_pattern(armature, hand_patterns)
+
+            if hand_pos:
+                # Position at hand bone
+                blade.location = hand_pos + Vector((0, 0.05, 0))
+                print(f"    Positioned at bone '{hand_bone}': {blade.location}")
+            else:
+                # Fallback: estimate from mesh bounds
+                center, (min_z, max_z) = get_mesh_bounds(base_mesh)
+                if center:
+                    blade.location = (sign * 0.35, center.y + 0.3, max_z * 0.45)
+                else:
+                    blade.location = (sign * 0.18, 0.45, 0.70)
+                print(f"    Using fallback position: {blade.location}")
+
             blade.rotation_euler = (math.radians(-20), 0, math.radians(sign * 5))
 
-            # Parent to base mesh
-            blade.parent = base_mesh
+            # Parent to hand bone
+            if armature and hand_bone:
+                parent_to_bone(blade, armature, hand_bone)
+            else:
+                blade.parent = base_mesh
 
             blade_hands.append(blade)
             print(f"    ✓ Blade hand {side} attached ({len(blade.data.vertices)} verts)")
@@ -476,8 +631,8 @@ def add_blade_hands(base_mesh):
 
     return blade_hands
 
-def add_cable_clusters(base_mesh):
-    """Import and attach cable clusters connecting shoulder to back"""
+def add_cable_clusters(base_mesh, armature):
+    """Import and attach cable clusters to spine/chest bone"""
     print("Adding cable clusters (kitbash import)...")
 
     try:
@@ -492,11 +647,27 @@ def add_cable_clusters(base_mesh):
             bpy.context.view_layer.objects.active = cables
             bpy.ops.object.join()
 
-        # Position to connect shoulder to back
-        cables.location = (0, 0, 1.05)
+        # Find spine/chest bone position
+        spine_bone, spine_pos = find_bone_by_pattern(armature, ['spine', 'chest', 'torso'])
 
-        # Parent to base mesh
-        cables.parent = base_mesh
+        if spine_pos:
+            # Position at spine
+            cables.location = spine_pos + Vector((0.15, -0.08, 0.10))
+            print(f"    Positioned at bone '{spine_bone}': {cables.location}")
+        else:
+            # Fallback
+            center, (min_z, max_z) = get_mesh_bounds(base_mesh)
+            if center:
+                cables.location = (center.x + 0.15, center.y - 0.08, max_z * 0.65)
+            else:
+                cables.location = (0.15, -0.08, 1.05)
+            print(f"    Using fallback position: {cables.location}")
+
+        # Parent to spine bone
+        if armature and spine_bone:
+            parent_to_bone(cables, armature, spine_bone)
+        else:
+            cables.parent = base_mesh
 
         print(f"    ✓ Cable cluster attached ({len(cables.data.vertices)} verts)")
         return [cables]
@@ -583,6 +754,16 @@ def main():
         print("STEP 1: Importing base mesh...")
         clear_scene()
         basemesh = import_basemesh(BASEMESH_PATH, "PenitentMechanism_Base")
+
+        # Find armature (imported with base mesh)
+        armature = find_armature()
+        if armature:
+            print(f"  ✓ Found armature: {armature.name} ({len(armature.data.bones)} bones)")
+            # List some key bones for debugging
+            bone_names = [b.name for b in armature.data.bones]
+            print(f"  Sample bones: {bone_names[:5]}...")
+        else:
+            print("  ⚠ No armature found - using fallback positioning")
         print()
 
         # STEP 2: Create upgraded materials
@@ -612,7 +793,7 @@ def main():
 
         # STEP 5: Add mechanical kitbash
         print("STEP 5: Adding mechanical corruption...")
-        shoulder_parts = add_shoulder_mechanism(basemesh)
+        shoulder_parts = add_shoulder_mechanism(basemesh, armature)
         for part in shoulder_parts:
             if not part.data.materials:
                 part.data.materials.append(mat_bronze)
@@ -620,7 +801,7 @@ def main():
 
         # STEP 6: Add halo
         print("STEP 6: Creating mechanical halo...")
-        halo_parts = add_mechanical_halo(basemesh)
+        halo_parts = add_mechanical_halo(basemesh, armature)
         for part in halo_parts:
             if not part.data.materials:
                 part.data.materials.append(mat_bronze)
@@ -628,7 +809,7 @@ def main():
 
         # STEP 7: Add blade hands
         print("STEP 7: Creating blade-hands...")
-        blade_parts = add_blade_hands(basemesh)
+        blade_parts = add_blade_hands(basemesh, armature)
         for part in blade_parts:
             if not part.data.materials:
                 part.data.materials.append(mat_bronze)
@@ -636,7 +817,7 @@ def main():
 
         # STEP 8: Add cable clusters
         print("STEP 8: Adding cable clusters...")
-        cable_parts = add_cable_clusters(basemesh)
+        cable_parts = add_cable_clusters(basemesh, armature)
         for part in cable_parts:
             if not part.data.materials:
                 part.data.materials.append(mat_bronze)
