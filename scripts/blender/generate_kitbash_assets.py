@@ -439,6 +439,8 @@ def generate_cable_cluster():
 
     # Convert curves to mesh
     for cable in cables:
+        bpy.ops.object.select_all(action='DESELECT')
+        cable.select_set(True)
         bpy.context.view_layer.objects.active = cable
         bpy.ops.object.convert(target='MESH')
 
