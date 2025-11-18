@@ -40,6 +40,14 @@ def clear_scene():
         if block.users == 0:
             bpy.data.armatures.remove(block)
 
+# Target mesh names to look for (in order of preference)
+TARGET_MESHES = [
+    "GEO-body_male_realistic",
+    "GEO-body_male_stylized",
+    "GEO-body_female_realistic",
+    "GEO-body_female_stylized",
+]
+
 def import_human_base():
     """Import the human base mesh from the source file"""
     print(f"Importing human base mesh from: {INPUT_PATH}")
@@ -55,14 +63,36 @@ def import_human_base():
             "Run 'git lfs pull' to download the actual file."
         )
 
-    # Import all objects from the blend file
+    # First, check what objects are available
     with bpy.data.libraries.load(INPUT_PATH, link=False) as (data_from, data_to):
-        data_to.objects = data_from.objects
-        data_to.armatures = data_from.armatures
+        available_objects = list(data_from.objects)
 
-    # Link imported objects to scene
+    # Find target mesh name
+    target_name = None
+    for name in TARGET_MESHES:
+        if name in available_objects:
+            target_name = name
+            print(f"  Found target mesh: {name}")
+            break
+
+    if not target_name:
+        # Fall back to finding any full body mesh
+        for name in available_objects:
+            if "body" in name.lower() and ("male" in name.lower() or "female" in name.lower()):
+                if "primitive" not in name.lower():
+                    target_name = name
+                    print(f"  Found fallback body mesh: {name}")
+                    break
+
+    if not target_name:
+        raise RuntimeError(f"No suitable body mesh found in {INPUT_PATH}")
+
+    # Import only the target mesh
+    with bpy.data.libraries.load(INPUT_PATH, link=False) as (data_from, data_to):
+        data_to.objects = [target_name]
+
+    # Link imported object to scene
     imported_meshes = []
-    imported_armatures = []
 
     for obj in data_to.objects:
         if obj is not None:
@@ -70,18 +100,20 @@ def import_human_base():
             if obj.type == 'MESH':
                 imported_meshes.append(obj)
                 print(f"  ✓ Imported mesh: {obj.name} ({len(obj.data.vertices)} verts)")
-            elif obj.type == 'ARMATURE':
-                imported_armatures.append(obj)
-                print(f"  ✓ Imported armature: {obj.name}")
 
     if not imported_meshes:
-        raise RuntimeError("No mesh objects found in human_base_mesh.blend")
+        raise RuntimeError(f"Failed to import {target_name}")
 
-    # Find the main body mesh (largest vertex count)
-    main_mesh = max(imported_meshes, key=lambda o: len(o.data.vertices))
+    main_mesh = imported_meshes[0]
+
+    # Make mesh data single-user if it's shared
+    if main_mesh.data.users > 1:
+        print(f"  Making mesh data single-user...")
+        main_mesh.data = main_mesh.data.copy()
+
     print(f"\n  Main body mesh: {main_mesh.name}")
 
-    return main_mesh, imported_meshes, imported_armatures
+    return main_mesh, imported_meshes, []
 
 def prepare_base_mesh(main_mesh, all_meshes, armatures):
     """
