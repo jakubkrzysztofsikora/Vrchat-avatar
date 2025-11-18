@@ -480,6 +480,237 @@ def add_surface_weathering(obj):
     displace.texture = tex
 
 # ============================================================================
+# BODY MODIFICATION (transform human mesh into mechanical statue)
+# ============================================================================
+
+def add_bronze_mask(base_mesh, armature):
+    """Add a bronze mask covering the face - no nose, no mouth, only eye slits"""
+    print("Adding bronze mask to cover face...")
+
+    # Find head bone position
+    head_bone, head_pos = find_bone_by_pattern(armature, ['head', 'skull'])
+
+    if head_pos:
+        mask_pos = head_pos + Vector((0, 0.02, 0.05))
+    else:
+        # Fallback
+        center, (min_z, max_z) = get_mesh_bounds(base_mesh)
+        if center:
+            mask_pos = Vector((center.x, center.y + 0.02, max_z - 0.15))
+        else:
+            mask_pos = Vector((0, 0.02, 1.65))
+
+    # Create mask base (elongated sphere, flattened)
+    bpy.ops.mesh.primitive_uv_sphere_add(
+        segments=16,
+        ring_count=12,
+        radius=0.12,
+        location=mask_pos
+    )
+    mask = bpy.context.active_object
+    mask.name = "Bronze_Mask"
+
+    # Flatten and shape the mask
+    mask.scale = (0.9, 0.6, 1.1)  # Taller, flatter
+    bpy.ops.object.transform_apply(scale=True)
+
+    # Add eye slits (boolean cutouts)
+    for side in [-1, 1]:
+        bpy.ops.mesh.primitive_cube_add(
+            size=0.03,
+            location=(mask_pos.x + side * 0.035, mask_pos.y - 0.08, mask_pos.z + 0.02)
+        )
+        eye_cutter = bpy.context.active_object
+        eye_cutter.scale = (1.5, 2.0, 0.3)  # Almond shape
+        eye_cutter.rotation_euler = (0, 0, math.radians(side * 10))
+
+        # Apply boolean
+        bool_mod = mask.modifiers.new(name=f"Eye_{side}", type='BOOLEAN')
+        bool_mod.operation = 'DIFFERENCE'
+        bool_mod.object = eye_cutter
+
+        # Apply modifier
+        bpy.context.view_layer.objects.active = mask
+        bpy.ops.object.modifier_apply(modifier=bool_mod.name)
+
+        # Delete cutter
+        bpy.data.objects.remove(eye_cutter, do_unlink=True)
+
+    # Add forehead ridge
+    bpy.ops.mesh.primitive_cube_add(
+        size=0.15,
+        location=(mask_pos.x, mask_pos.y - 0.03, mask_pos.z + 0.08)
+    )
+    ridge = bpy.context.active_object
+    ridge.scale = (1.2, 0.2, 0.15)
+    bpy.ops.object.transform_apply(scale=True)
+
+    # Join ridge to mask
+    bpy.ops.object.select_all(action='DESELECT')
+    ridge.select_set(True)
+    mask.select_set(True)
+    bpy.context.view_layer.objects.active = mask
+    bpy.ops.object.join()
+
+    # Parent to head bone
+    if armature and head_bone:
+        parent_to_bone(mask, armature, head_bone)
+    else:
+        mask.parent = base_mesh
+
+    print(f"    ✓ Bronze mask created ({len(mask.data.vertices)} verts)")
+    return mask
+
+def delete_hand_geometry(base_mesh):
+    """Delete hand vertices from the base mesh (will be replaced by blade hands)"""
+    print("Removing hand geometry from base mesh...")
+
+    bpy.context.view_layer.objects.active = base_mesh
+    bpy.ops.object.mode_set(mode='EDIT')
+
+    bm = bmesh.from_edit_mesh(base_mesh.data)
+    bm.verts.ensure_lookup_table()
+
+    # Find vertices below wrist height and at hand X positions
+    # This is approximate - we select vertices at the extremities
+    verts_to_delete = []
+
+    # Get mesh bounds
+    min_x = min(v.co.x for v in bm.verts)
+    max_x = max(v.co.x for v in bm.verts)
+    min_z = min(v.co.z for v in bm.verts)
+    max_z = max(v.co.z for v in bm.verts)
+
+    # Hand region is roughly:
+    # - X: outer 15% on each side
+    # - Z: lower 50% of the model (below chest)
+    hand_x_threshold = (max_x - min_x) * 0.35
+    wrist_z = min_z + (max_z - min_z) * 0.45
+
+    for v in bm.verts:
+        # Check if vertex is in hand region
+        is_hand_x = abs(v.co.x) > hand_x_threshold
+        is_below_wrist = v.co.z < wrist_z
+
+        if is_hand_x and is_below_wrist:
+            verts_to_delete.append(v)
+
+    # Delete the vertices
+    if verts_to_delete:
+        bmesh.ops.delete(bm, geom=verts_to_delete, context='VERTS')
+        bmesh.update_edit_mesh(base_mesh.data)
+        print(f"    ✓ Deleted {len(verts_to_delete)} hand vertices")
+    else:
+        print("    ⚠ No hand vertices found to delete")
+
+    bpy.ops.object.mode_set(mode='OBJECT')
+
+def add_body_segmentation(base_mesh):
+    """Add segmentation cuts to make body look mechanical/armored"""
+    print("Adding body segmentation for mechanical appearance...")
+
+    bpy.context.view_layer.objects.active = base_mesh
+    bpy.ops.object.mode_set(mode='EDIT')
+
+    bm = bmesh.from_edit_mesh(base_mesh.data)
+    bm.edges.ensure_lookup_table()
+
+    # Get Z range
+    min_z = min(v.co.z for v in bm.verts)
+    max_z = max(v.co.z for v in bm.verts)
+    height = max_z - min_z
+
+    # Select horizontal edge loops at key body segment points
+    # Neck, chest, waist, hips, knees
+    segment_heights = [0.85, 0.70, 0.55, 0.45, 0.30]
+
+    edges_to_bevel = []
+    for ratio in segment_heights:
+        target_z = min_z + height * ratio
+        tolerance = height * 0.02
+
+        for edge in bm.edges:
+            # Check if edge is roughly horizontal at this height
+            v1_z = edge.verts[0].co.z
+            v2_z = edge.verts[1].co.z
+
+            if abs(v1_z - v2_z) < tolerance:  # Horizontal-ish
+                avg_z = (v1_z + v2_z) / 2
+                if abs(avg_z - target_z) < tolerance:
+                    edges_to_bevel.append(edge)
+
+    # Bevel selected edges for panel line effect
+    if edges_to_bevel:
+        result = bmesh.ops.bevel(
+            bm,
+            geom=edges_to_bevel,
+            offset=0.003,
+            segments=2,
+            affect='EDGES'
+        )
+        print(f"    ✓ Added {len(edges_to_bevel)} segmentation lines")
+
+    bmesh.update_edit_mesh(base_mesh.data)
+    bpy.ops.object.mode_set(mode='OBJECT')
+
+def add_neck_segments(base_mesh, armature):
+    """Add segmented neck rings for unnatural head rotation"""
+    print("Adding segmented neck rings...")
+
+    # Find neck position
+    neck_bone, neck_pos = find_bone_by_pattern(armature, ['neck', 'spine'])
+
+    if neck_pos:
+        base_pos = neck_pos
+    else:
+        center, (min_z, max_z) = get_mesh_bounds(base_mesh)
+        if center:
+            base_pos = Vector((center.x, center.y, max_z * 0.85))
+        else:
+            base_pos = Vector((0, 0, 1.45))
+
+    neck_rings = []
+
+    # Create 3 stacked rings
+    for i in range(3):
+        ring_z = base_pos.z + i * 0.025
+
+        bpy.ops.mesh.primitive_torus_add(
+            major_radius=0.08 - i * 0.005,
+            minor_radius=0.015,
+            major_segments=16,
+            minor_segments=8,
+            location=(base_pos.x, base_pos.y, ring_z)
+        )
+        ring = bpy.context.active_object
+        ring.name = f"Neck_Ring_{i}"
+        neck_rings.append(ring)
+
+    # Join all rings
+    if len(neck_rings) > 1:
+        bpy.ops.object.select_all(action='DESELECT')
+        for ring in neck_rings:
+            ring.select_set(True)
+        bpy.context.view_layer.objects.active = neck_rings[0]
+        bpy.ops.object.join()
+
+    neck_assembly = neck_rings[0]
+    neck_assembly.name = "Neck_Segments"
+
+    # Parent to neck bone
+    if armature:
+        neck_bone_name, _ = find_bone_by_pattern(armature, ['neck'])
+        if neck_bone_name:
+            parent_to_bone(neck_assembly, armature, neck_bone_name)
+        else:
+            neck_assembly.parent = base_mesh
+    else:
+        neck_assembly.parent = base_mesh
+
+    print(f"    ✓ Neck segments created ({len(neck_assembly.data.vertices)} verts)")
+    return neck_assembly
+
+# ============================================================================
 # MECHANICAL KITBASH (import pre-modeled assets)
 # ============================================================================
 
@@ -775,56 +1006,78 @@ def main():
         print("  ✓ 4 materials created with procedural detail")
         print()
 
-        # STEP 3: Assign base materials to body
-        print("STEP 3: Assigning materials to base mesh...")
-        if not basemesh.data.materials:
-            basemesh.data.materials.append(mat_ivory)
-        else:
-            basemesh.data.materials[0] = mat_ivory
-        print("  ✓ Base mesh materialed")
+        # STEP 3: Body modification - transform into mechanical statue
+        print("STEP 3: Transforming body into mechanical statue...")
+
+        # 3a: Delete hand geometry (will be replaced by blade hands)
+        delete_hand_geometry(basemesh)
+
+        # 3b: Add body segmentation for mechanical appearance
+        add_body_segmentation(basemesh)
+
+        # 3c: Add bronze mask over face
+        mask = add_bronze_mask(basemesh, armature)
+        if mask:
+            mask.data.materials.append(mat_bronze)
+
+        # 3d: Add segmented neck rings
+        neck = add_neck_segments(basemesh, armature)
+        if neck:
+            neck.data.materials.append(mat_bronze)
+
+        print("  ✓ Body transformation complete")
         print()
 
-        # STEP 4: Add geometric detail
-        print("STEP 4: Adding geometric detail...")
+        # STEP 4: Assign bronze material to body (statue, not flesh)
+        print("STEP 4: Assigning materials to base mesh...")
+        if not basemesh.data.materials:
+            basemesh.data.materials.append(mat_bronze)
+        else:
+            basemesh.data.materials[0] = mat_bronze
+        print("  ✓ Base mesh materialed with bronze")
+        print()
+
+        # STEP 5: Adding geometric detail
+        print("STEP 5: Adding geometric detail...")
         add_panel_lines(basemesh, num_lines=8)
         add_bolts_to_object(basemesh, count=12)
         add_surface_weathering(basemesh)
         print()
 
-        # STEP 5: Add mechanical kitbash
-        print("STEP 5: Adding mechanical corruption...")
+        # STEP 6: Add mechanical kitbash
+        print("STEP 6: Adding mechanical corruption...")
         shoulder_parts = add_shoulder_mechanism(basemesh, armature)
         for part in shoulder_parts:
             if not part.data.materials:
                 part.data.materials.append(mat_bronze)
         print()
 
-        # STEP 6: Add halo
-        print("STEP 6: Creating mechanical halo...")
+        # STEP 7: Add halo
+        print("STEP 7: Creating mechanical halo...")
         halo_parts = add_mechanical_halo(basemesh, armature)
         for part in halo_parts:
             if not part.data.materials:
                 part.data.materials.append(mat_bronze)
         print()
 
-        # STEP 7: Add blade hands
-        print("STEP 7: Creating blade-hands...")
+        # STEP 8: Add blade hands
+        print("STEP 8: Creating blade-hands...")
         blade_parts = add_blade_hands(basemesh, armature)
         for part in blade_parts:
             if not part.data.materials:
                 part.data.materials.append(mat_bronze)
         print()
 
-        # STEP 8: Add cable clusters
-        print("STEP 8: Adding cable clusters...")
+        # STEP 9: Add cable clusters
+        print("STEP 9: Adding cable clusters...")
         cable_parts = add_cable_clusters(basemesh, armature)
         for part in cable_parts:
             if not part.data.materials:
                 part.data.materials.append(mat_bronze)
         print()
 
-        # STEP 9: Setup rigging
-        print("STEP 9: Setting up rigging...")
+        # STEP 10: Setup rigging
+        print("STEP 10: Setting up rigging...")
         metarig = create_rigify_metarig()
         rig = generate_rigify_rig(metarig)
 
@@ -835,7 +1088,7 @@ def main():
             apply_automatic_weights(mesh_objects, rig)
         print()
 
-        # STEP 10: Final statistics
+        # STEP 11: Final statistics
         print("=" * 60)
         print("SCENE STATISTICS")
         print("=" * 60)
@@ -854,7 +1107,7 @@ def main():
         print("=" * 60)
         print()
 
-        # STEP 11: Save
+        # STEP 12: Save
         print(f"Saving to: {OUTPUT_PATH}")
         bpy.ops.wm.save_as_mainfile(filepath=OUTPUT_PATH)
         print("✓ File saved!")
