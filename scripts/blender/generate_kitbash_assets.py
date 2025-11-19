@@ -18,6 +18,35 @@ from mathutils import Vector, Matrix
 
 OUTPUT_DIR = "Avatar/Kitbash/"
 
+def add_bevel_modifier(obj, width=0.005, segments=3):
+    """Add high-quality bevel modifier for light catching"""
+    bevel = obj.modifiers.new(name="Bevel", type='BEVEL')
+    bevel.width = width
+    bevel.segments = segments
+    bevel.limit_method = 'ANGLE'
+    bevel.angle_limit = math.radians(30)
+    bpy.ops.object.shade_smooth(use_auto_smooth=True)
+
+def create_segmented_blade(length=0.2, width=0.03, segments=4):
+    """Create a segmented, sharp blade using extrusion"""
+    # Start with a flattened cube
+    bpy.ops.mesh.primitive_cube_add(size=1, location=(0,0,0))
+    blade = bpy.context.active_object
+    blade.scale = (width, width/4, length/segments)
+    bpy.ops.object.transform_apply(scale=True)
+
+    # Array modifier for segments
+    array = blade.modifiers.new(name="Array", type='ARRAY')
+    array.count = segments
+    array.use_relative_offset = True
+    array.relative_offset_displace = (0, 0, 0.9) # Slight overlap
+
+    # Taper modifier
+    lattice = blade.modifiers.new(name="Taper", type='SIMPLE_DEFORM')
+    lattice.deform_method = 'TAPER'
+    lattice.factor = 0.8
+    return blade
+
 def clear_scene():
     """Remove all objects"""
     bpy.ops.object.select_all(action='SELECT')
@@ -213,10 +242,6 @@ def generate_shoulder_mechanism():
     bpy.ops.mesh.bevel(offset=0.03, segments=3)
     bpy.ops.object.mode_set(mode='OBJECT')
 
-    # Add subdivision for smooth mechanical look
-    subsurf = plate.modifiers.new(name="Subdivision", type='SUBSURF')
-    subsurf.levels = 1
-
     # Secondary armor plates
     for i, offset in enumerate([0.12, -0.12, 0.08]):
         bpy.ops.mesh.primitive_cube_add(
@@ -228,6 +253,7 @@ def generate_shoulder_mechanism():
         sub_plate.scale = (0.6, 0.8, 0.3)
         sub_plate.rotation_euler = (0, 0, math.radians(15 * i))
         bpy.ops.object.transform_apply(scale=True, rotation=True)
+        add_bevel_modifier(sub_plate, 0.005)
 
     # Gears
     gear1 = create_gear(0.08, 0.04, 12, "Gear_Large")
@@ -282,6 +308,7 @@ def generate_shoulder_mechanism():
 
     shoulder = bpy.context.active_object
     shoulder.name = "Mech_Shoulder_Assembly"
+    add_bevel_modifier(shoulder, 0.005, 2)
 
     # Set origin to attachment point (left side)
     bpy.ops.object.origin_set(type='ORIGIN_GEOMETRY', center='BOUNDS')
@@ -310,28 +337,31 @@ def generate_blade_hand(is_left=True):
     palm.name = "Hand_Palm"
     palm.scale = (1.2, 0.6, 0.4)
     bpy.ops.object.transform_apply(scale=True)
+    add_bevel_modifier(palm, 0.005)
 
     # Fused blade fingers (3 blades merged together)
-    for i, x_offset in enumerate([-0.03, 0.0, 0.03]):
-        # Blade cone
-        bpy.ops.mesh.primitive_cone_add(
-            vertices=6,
-            radius1=0.015,
-            radius2=0.002,
-            depth=0.18,
-            location=(x_offset, 0.08, 0)
-        )
-        blade = bpy.context.active_object
+    # Use generated segmented blades instead of cones
+    for i, x_offset in enumerate([-0.035, 0.0, 0.035]):
+        blade = create_segmented_blade(length=0.25, width=0.025, segments=5)
         blade.name = f"Blade_Finger_{i}"
-        blade.rotation_euler = (math.radians(-20), 0, 0)
 
-        # Taper the blade
+        # Position
+        blade.location = (x_offset, 0.08, 0)
+        # Rotate forward
+        blade.rotation_euler = (math.radians(-15), 0, 0)
+
+        # Apply modifiers to make it real mesh
+        bpy.context.view_layer.objects.active = blade
+        for mod in blade.modifiers:
+            bpy.ops.object.modifier_apply(modifier=mod.name)
+
+        # Sharpen the tip
         bpy.ops.object.mode_set(mode='EDIT')
         bpy.ops.mesh.select_all(action='SELECT')
-
-        # Add sharp edge
-        bpy.ops.mesh.bevel(offset=0.001, segments=1)
+        bpy.ops.mesh.remove_doubles()
         bpy.ops.object.mode_set(mode='OBJECT')
+
+        add_bevel_modifier(blade, 0.001, 1)
 
     # Wrist connector
     bpy.ops.mesh.primitive_cylinder_add(

@@ -90,6 +90,40 @@ def find_bone_by_pattern(armature, patterns):
 
     return None, None
 
+def bind_mesh_to_bone(obj, armature, bone_name):
+    """
+    Rigidly bind a mesh to a bone using Vertex Groups (Standard Skinning).
+    This prevents 'floating' objects and ensures VRChat compatibility.
+    """
+    if armature is None:
+        return False
+
+    # 1. Find actual bone name
+    actual_bone_name = None
+    for bone in armature.data.bones:
+        if bone_name.lower() in bone.name.lower():
+            actual_bone_name = bone.name
+            break
+
+    if not actual_bone_name:
+        print(f"    ⚠ Bone '{bone_name}' not found for binding")
+        return False
+
+    # 2. Create Vertex Group and assign all verts with weight 1.0
+    vg = obj.vertex_groups.new(name=actual_bone_name)
+    verts = [v.index for v in obj.data.vertices]
+    vg.add(verts, 1.0, 'REPLACE')
+
+    # 3. Add Armature Modifier
+    mod = obj.modifiers.new(name="Armature", type='ARMATURE')
+    mod.object = armature
+
+    # 4. Parent to Armature Object (not Bone)
+    obj.parent = armature
+
+    print(f"    ✓ Bound {obj.name} to bone '{actual_bone_name}' (Rigid Skinning)")
+    return True
+
 def parent_to_bone(obj, armature, bone_name):
     """Parent object to a specific bone"""
     if armature is None:
@@ -553,10 +587,9 @@ def add_bronze_mask(base_mesh, armature):
     bpy.ops.object.join()
 
     # Parent to head bone
+    # Use rigid skinning for head
     if armature and head_bone:
-        parent_to_bone(mask, armature, head_bone)
-    else:
-        mask.parent = base_mesh
+        bind_mesh_to_bone(mask, armature, head_bone)
 
     print(f"    ✓ Bronze mask created ({len(mask.data.vertices)} verts)")
     return mask
@@ -759,9 +792,11 @@ def add_body_armor(base_mesh, armature):
     bpy.ops.object.transform_apply(scale=True)
     armor_parts.append(back)
 
-    # Parent all armor to base mesh
+    # Parent all armor to armature
+    # Ideally these should be skinned to their respective bones
+    # For now, we parent to armature, but in AAA pipeline they need weights
     for part in armor_parts:
-        part.parent = base_mesh
+        part.parent = armature
 
     print(f"    ✓ Added {len(armor_parts)} armor pieces")
     return armor_parts
@@ -814,11 +849,7 @@ def add_neck_segments(base_mesh, armature):
     if armature:
         neck_bone_name, _ = find_bone_by_pattern(armature, ['neck'])
         if neck_bone_name:
-            parent_to_bone(neck_assembly, armature, neck_bone_name)
-        else:
-            neck_assembly.parent = base_mesh
-    else:
-        neck_assembly.parent = base_mesh
+            bind_mesh_to_bone(neck_assembly, armature, neck_bone_name)
 
     print(f"    ✓ Neck segments created ({len(neck_assembly.data.vertices)} verts)")
     return neck_assembly
@@ -870,9 +901,7 @@ def add_shoulder_mechanism(base_mesh, armature):
 
         # Parent to shoulder bone
         if armature and shoulder_bone:
-            parent_to_bone(shoulder, armature, shoulder_bone)
-        else:
-            shoulder.parent = base_mesh
+            bind_mesh_to_bone(shoulder, armature, shoulder_bone)
 
         print(f"    ✓ Shoulder mechanism attached ({len(shoulder.data.vertices)} verts)")
         return [shoulder]
@@ -924,9 +953,7 @@ def add_mechanical_halo(base_mesh, armature):
 
         # Parent to head bone
         if armature and head_bone:
-            parent_to_bone(halo, armature, head_bone)
-        else:
-            halo.parent = base_mesh
+            bind_mesh_to_bone(halo, armature, head_bone)
 
         print(f"    ✓ Halo attached ({len(halo.data.vertices)} verts)")
         return [halo]
@@ -977,9 +1004,7 @@ def add_blade_hands(base_mesh, armature):
 
             # Parent to hand bone
             if armature and hand_bone:
-                parent_to_bone(blade, armature, hand_bone)
-            else:
-                blade.parent = base_mesh
+                bind_mesh_to_bone(blade, armature, hand_bone)
 
             blade_hands.append(blade)
             print(f"    ✓ Blade hand {side} attached ({len(blade.data.vertices)} verts)")
@@ -1023,9 +1048,7 @@ def add_cable_clusters(base_mesh, armature):
 
         # Parent to spine bone
         if armature and spine_bone:
-            parent_to_bone(cables, armature, spine_bone)
-        else:
-            cables.parent = base_mesh
+            bind_mesh_to_bone(cables, armature, spine_bone)
 
         print(f"    ✓ Cable cluster attached ({len(cables.data.vertices)} verts)")
         return [cables]
@@ -1078,6 +1101,10 @@ def apply_automatic_weights(mesh_objects, armature):
 
     for obj in mesh_objects:
         if obj.type != 'MESH':
+            continue
+
+        # Skip objects that already have vertex groups (Rigid Skinned objects)
+        if len(obj.vertex_groups) > 0:
             continue
 
         # Select mesh and armature
