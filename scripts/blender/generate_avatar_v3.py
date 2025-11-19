@@ -90,10 +90,10 @@ def find_bone_by_pattern(armature, patterns):
 
     return None, None
 
-def bind_mesh_to_bone(obj, armature, bone_name):
+def prepare_mesh_for_merge(obj, armature, bone_name):
     """
-    Rigidly bind a mesh to a bone using Vertex Groups (Standard Skinning).
-    This prevents 'floating' objects and ensures VRChat compatibility.
+    Assigns vertices to a Vertex Group matching the bone name (Rigid Skinning).
+    Does NOT parent the object yet. We will merge all objects later.
     """
     if armature is None:
         return False
@@ -110,19 +110,49 @@ def bind_mesh_to_bone(obj, armature, bone_name):
         return False
 
     # 2. Create Vertex Group and assign all verts with weight 1.0
+    # This ensures that when merged, these vertices stick to this bone
     vg = obj.vertex_groups.new(name=actual_bone_name)
     verts = [v.index for v in obj.data.vertices]
     vg.add(verts, 1.0, 'REPLACE')
 
-    # 3. Add Armature Modifier
-    mod = obj.modifiers.new(name="Armature", type='ARMATURE')
-    mod.object = armature
-
-    # 4. Parent to Armature Object (not Bone)
-    obj.parent = armature
-
-    print(f"    ✓ Bound {obj.name} to bone '{actual_bone_name}' (Rigid Skinning)")
+    print(f"    ✓ Assigned {obj.name} vertices to group '{actual_bone_name}'")
     return True
+
+def merge_all_meshes(base_mesh, armature):
+    """Combine all mesh objects into one for VRChat optimization (Draw Calls)"""
+    print("  Merging all meshes into single body...")
+
+    # Select base mesh as active
+    bpy.ops.object.select_all(action='DESELECT')
+    base_mesh.select_set(True)
+    bpy.context.view_layer.objects.active = base_mesh
+
+    # Select all other meshes
+    for obj in bpy.context.scene.objects:
+        if obj.type == 'MESH' and obj != base_mesh:
+            obj.select_set(True)
+            # Apply all modifiers (Bevels etc) before joining to freeze geometry
+            # But do NOT apply Armature modifiers if they exist
+            bpy.context.view_layer.objects.active = obj
+            for mod in obj.modifiers:
+                if mod.type != 'ARMATURE':
+                    try:
+                        bpy.ops.object.modifier_apply(modifier=mod.name)
+                    except:
+                        pass  # Skip if modifier can't be applied
+
+    # Join
+    bpy.context.view_layer.objects.active = base_mesh
+    bpy.ops.object.join()
+
+    # Ensure Armature Modifier exists on final mesh
+    if not any(m.type == 'ARMATURE' for m in base_mesh.modifiers):
+        mod = base_mesh.modifiers.new(name="Armature", type='ARMATURE')
+        mod.object = armature
+
+    # Parent final mesh to armature
+    base_mesh.parent = armature
+    print(f"    ✓ Merged into '{base_mesh.name}' ({len(base_mesh.data.vertices)} verts)")
 
 def parent_to_bone(obj, armature, bone_name):
     """Parent object to a specific bone"""
@@ -587,9 +617,9 @@ def add_bronze_mask(base_mesh, armature):
     bpy.ops.object.join()
 
     # Parent to head bone
-    # Use rigid skinning for head
+    # Prepare for merge instead of parenting
     if armature and head_bone:
-        bind_mesh_to_bone(mask, armature, head_bone)
+        prepare_mesh_for_merge(mask, armature, head_bone)
 
     print(f"    ✓ Bronze mask created ({len(mask.data.vertices)} verts)")
     return mask
@@ -792,11 +822,9 @@ def add_body_armor(base_mesh, armature):
     bpy.ops.object.transform_apply(scale=True)
     armor_parts.append(back)
 
-    # Parent all armor to armature
-    # Ideally these should be skinned to their respective bones
-    # For now, we parent to armature, but in AAA pipeline they need weights
-    for part in armor_parts:
-        part.parent = armature
+    # For armor, we just rely on it being joined to the base mesh later
+    # The base mesh has weights; armor might need nearest-bone weights or rigid
+    # Don't parent now - will be merged
 
     print(f"    ✓ Added {len(armor_parts)} armor pieces")
     return armor_parts
@@ -849,7 +877,7 @@ def add_neck_segments(base_mesh, armature):
     if armature:
         neck_bone_name, _ = find_bone_by_pattern(armature, ['neck'])
         if neck_bone_name:
-            bind_mesh_to_bone(neck_assembly, armature, neck_bone_name)
+            prepare_mesh_for_merge(neck_assembly, armature, neck_bone_name)
 
     print(f"    ✓ Neck segments created ({len(neck_assembly.data.vertices)} verts)")
     return neck_assembly
@@ -901,7 +929,7 @@ def add_shoulder_mechanism(base_mesh, armature):
 
         # Parent to shoulder bone
         if armature and shoulder_bone:
-            bind_mesh_to_bone(shoulder, armature, shoulder_bone)
+            prepare_mesh_for_merge(shoulder, armature, shoulder_bone)
 
         print(f"    ✓ Shoulder mechanism attached ({len(shoulder.data.vertices)} verts)")
         return [shoulder]
@@ -953,7 +981,7 @@ def add_mechanical_halo(base_mesh, armature):
 
         # Parent to head bone
         if armature and head_bone:
-            bind_mesh_to_bone(halo, armature, head_bone)
+            prepare_mesh_for_merge(halo, armature, head_bone)
 
         print(f"    ✓ Halo attached ({len(halo.data.vertices)} verts)")
         return [halo]
@@ -1004,7 +1032,7 @@ def add_blade_hands(base_mesh, armature):
 
             # Parent to hand bone
             if armature and hand_bone:
-                bind_mesh_to_bone(blade, armature, hand_bone)
+                prepare_mesh_for_merge(blade, armature, hand_bone)
 
             blade_hands.append(blade)
             print(f"    ✓ Blade hand {side} attached ({len(blade.data.vertices)} verts)")
@@ -1048,7 +1076,7 @@ def add_cable_clusters(base_mesh, armature):
 
         # Parent to spine bone
         if armature and spine_bone:
-            bind_mesh_to_bone(cables, armature, spine_bone)
+            prepare_mesh_for_merge(cables, armature, spine_bone)
 
         print(f"    ✓ Cable cluster attached ({len(cables.data.vertices)} verts)")
         return [cables]
@@ -1246,6 +1274,10 @@ def main():
             mesh_objects = [obj for obj in bpy.data.objects
                           if obj.type == 'MESH' and not obj.name.startswith('WGT-')]
             apply_automatic_weights(mesh_objects, rig)
+
+            # STEP 10b: MERGE MESHES (Optimization)
+            print("STEP 10b: Merging meshes for VRChat optimization...")
+            merge_all_meshes(basemesh, rig)
         print()
 
         # STEP 11: Final statistics

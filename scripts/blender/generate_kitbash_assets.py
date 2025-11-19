@@ -18,33 +18,40 @@ from mathutils import Vector, Matrix
 
 OUTPUT_DIR = "Avatar/Kitbash/"
 
-def add_bevel_modifier(obj, width=0.005, segments=3):
-    """Add high-quality bevel modifier for light catching"""
+def add_high_quality_modifiers(obj, bevel_width=0.002):
+    """Apply AAA hard-surface modifier stack: Bevel + Weighted Normal"""
+    # 1. Bevel for edge highlights (critical for realism)
     bevel = obj.modifiers.new(name="Bevel", type='BEVEL')
-    bevel.width = width
-    bevel.segments = segments
+    bevel.width = bevel_width
+    bevel.segments = 3
     bevel.limit_method = 'ANGLE'
     bevel.angle_limit = math.radians(30)
-    bpy.ops.object.shade_smooth(use_auto_smooth=True)
+    bevel.harden_normals = True
 
-def create_segmented_blade(length=0.2, width=0.03, segments=4):
-    """Create a segmented, sharp blade using extrusion"""
-    # Start with a flattened cube
-    bpy.ops.mesh.primitive_cube_add(size=1, location=(0,0,0))
+    # 2. Weighted Normal for clean shading on flat surfaces
+    wn = obj.modifiers.new(name="WeightedNormal", type='WEIGHTED_NORMAL')
+    wn.keep_sharp = True
+
+    obj.data.use_auto_smooth = True
+    obj.data.auto_smooth_angle = math.radians(30)
+
+def create_segmented_blade(length=0.25, width=0.03, segments=5):
+    """Create a detailed segmented blade (not a primitive cone)"""
+    bpy.ops.mesh.primitive_cube_add(size=1)
     blade = bpy.context.active_object
-    blade.scale = (width, width/4, length/segments)
+    blade.scale = (width, width/3, length/segments)
     bpy.ops.object.transform_apply(scale=True)
 
-    # Array modifier for segments
+    # Array for segmentation
     array = blade.modifiers.new(name="Array", type='ARRAY')
     array.count = segments
-    array.use_relative_offset = True
-    array.relative_offset_displace = (0, 0, 0.9) # Slight overlap
+    array.relative_offset_displace = (0, 0, 0.95) # Overlap
 
-    # Taper modifier
-    lattice = blade.modifiers.new(name="Taper", type='SIMPLE_DEFORM')
-    lattice.deform_method = 'TAPER'
-    lattice.factor = 0.8
+    # Taper
+    deform = blade.modifiers.new(name="Taper", type='SIMPLE_DEFORM')
+    deform.deform_method = 'TAPER'
+    deform.factor = 0.85
+
     return blade
 
 def clear_scene():
@@ -65,17 +72,14 @@ def create_halo_ring(radius, thickness, segments=64, name="Ring"):
     bpy.ops.mesh.primitive_torus_add(
         major_radius=radius,
         minor_radius=thickness,
-        major_segments=segments,
+        major_segments=128,  # AAA: High poly count for smooth curves
         minor_segments=16,
         location=(0, 0, 0)
     )
     ring = bpy.context.active_object
     ring.name = name
 
-    # Add bevels for mechanical look
-    bevel = ring.modifiers.new(name="Bevel", type='BEVEL')
-    bevel.width = thickness * 0.1
-    bevel.segments = 2
+    add_high_quality_modifiers(ring, thickness * 0.1)
 
     # Add array of decorative notches
     bpy.ops.object.mode_set(mode='EDIT')
@@ -186,7 +190,7 @@ def generate_mechanical_halo():
 def create_gear(radius, thickness, teeth=12, name="Gear"):
     """Create detailed gear with proper teeth"""
     bpy.ops.mesh.primitive_cylinder_add(
-        vertices=teeth * 2,
+        vertices=teeth * 4,  # AAA: Higher vertex density
         radius=radius,
         depth=thickness,
         location=(0, 0, 0)
@@ -216,10 +220,7 @@ def create_gear(radius, thickness, teeth=12, name="Gear"):
     bmesh.update_edit_mesh(gear.data)
     bpy.ops.object.mode_set(mode='OBJECT')
 
-    # Add bevel
-    bevel = gear.modifiers.new(name="Bevel", type='BEVEL')
-    bevel.width = 0.003
-    bevel.segments = 2
+    add_high_quality_modifiers(gear, 0.003)
 
     return gear
 
@@ -242,6 +243,8 @@ def generate_shoulder_mechanism():
     bpy.ops.mesh.bevel(offset=0.03, segments=3)
     bpy.ops.object.mode_set(mode='OBJECT')
 
+    add_high_quality_modifiers(plate, 0.005)
+
     # Secondary armor plates
     for i, offset in enumerate([0.12, -0.12, 0.08]):
         bpy.ops.mesh.primitive_cube_add(
@@ -253,7 +256,7 @@ def generate_shoulder_mechanism():
         sub_plate.scale = (0.6, 0.8, 0.3)
         sub_plate.rotation_euler = (0, 0, math.radians(15 * i))
         bpy.ops.object.transform_apply(scale=True, rotation=True)
-        add_bevel_modifier(sub_plate, 0.005)
+        add_high_quality_modifiers(sub_plate, 0.003)
 
     # Gears
     gear1 = create_gear(0.08, 0.04, 12, "Gear_Large")
@@ -267,7 +270,7 @@ def generate_shoulder_mechanism():
     # Pistons/hydraulic cylinders
     for i, (y, z) in enumerate([(0.05, -0.08), (-0.05, -0.06)]):
         bpy.ops.mesh.primitive_cylinder_add(
-            vertices=8,
+            vertices=32,  # Higher detail
             radius=0.015,
             depth=0.14,
             location=(0.08, y, z)
@@ -278,7 +281,7 @@ def generate_shoulder_mechanism():
 
         # Piston head
         bpy.ops.mesh.primitive_cylinder_add(
-            vertices=8,
+            vertices=32,
             radius=0.022,
             depth=0.035,
             location=(0.08, y + 0.08, z)
@@ -293,7 +296,7 @@ def generate_shoulder_mechanism():
         y = -0.12 + (i // 4) * 0.08
 
         bpy.ops.mesh.primitive_cylinder_add(
-            vertices=6,
+            vertices=16,  # Higher detail
             radius=0.008,
             depth=0.012,
             location=(x, y, 0.18)
@@ -308,7 +311,6 @@ def generate_shoulder_mechanism():
 
     shoulder = bpy.context.active_object
     shoulder.name = "Mech_Shoulder_Assembly"
-    add_bevel_modifier(shoulder, 0.005, 2)
 
     # Set origin to attachment point (left side)
     bpy.ops.object.origin_set(type='ORIGIN_GEOMETRY', center='BOUNDS')
@@ -337,7 +339,7 @@ def generate_blade_hand(is_left=True):
     palm.name = "Hand_Palm"
     palm.scale = (1.2, 0.6, 0.4)
     bpy.ops.object.transform_apply(scale=True)
-    add_bevel_modifier(palm, 0.005)
+    add_high_quality_modifiers(palm, 0.005)
 
     # Fused blade fingers (3 blades merged together)
     # Use generated segmented blades instead of cones
@@ -361,11 +363,11 @@ def generate_blade_hand(is_left=True):
         bpy.ops.mesh.remove_doubles()
         bpy.ops.object.mode_set(mode='OBJECT')
 
-        add_bevel_modifier(blade, 0.001, 1)
+        add_high_quality_modifiers(blade, 0.001)
 
     # Wrist connector
     bpy.ops.mesh.primitive_cylinder_add(
-        vertices=12,
+        vertices=32,  # Higher detail
         radius=0.04,
         depth=0.06,
         location=(0, -0.05, 0)
