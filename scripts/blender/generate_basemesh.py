@@ -1,22 +1,25 @@
 #!/usr/bin/env python3
 """
-Base Mesh Generator for The Penitent Mechanism
+Base Mesh Generator for The Penitent Mechanism - V4.0
+Imports high-quality human base mesh and adapts it for the avatar
 
-Creates a proper humanoid base mesh with good topology in a kneeling pose.
-This is saved as a reusable asset that generate_avatar.py will import and modify.
+ARCHITECTURE:
+- Imports pre-modeled human base mesh (human_base_mesh.blend)
+- Applies scale and pose adjustments for kneeling statue aesthetic
+- Saves as reusable base for kitbashing mechanical parts
 
-Key principles:
-- Proper quad-based topology with edge loops
-- Kneeling pose baked into the mesh
-- Statue-like aesthetic (geometric, not too organic)
-- Optimized for subdivision and modification
+This uses a proper anatomical mesh with professional topology
+instead of generating from primitives or skin modifier.
 """
 
 import bpy
 import bmesh
 import math
+import os
 from mathutils import Vector
 
+# Input: Human base mesh from root repo (stored in Git LFS)
+INPUT_PATH = os.path.abspath("human_base_mesh.blend")
 OUTPUT_PATH = "Avatar/BaseMeshes/PenitentMechanism_Base.blend"
 
 def clear_scene():
@@ -24,265 +27,240 @@ def clear_scene():
     bpy.ops.object.select_all(action='SELECT')
     bpy.ops.object.delete(use_global=False)
 
-def create_torso_base():
-    """Create torso with proper topology"""
-    bpy.ops.mesh.primitive_cube_add(size=1, location=(0, 0, 0.9))
-    torso = bpy.context.active_object
-    torso.name = "Torso"
+    # Clear orphan data
+    for block in bpy.data.meshes:
+        if block.users == 0:
+            bpy.data.meshes.remove(block)
 
-    # Scale to body proportions
-    torso.scale = (0.35, 0.25, 0.5)
-    bpy.ops.object.transform_apply(scale=True)
+    for block in bpy.data.materials:
+        if block.users == 0:
+            bpy.data.materials.remove(block)
 
-    # Enter edit mode and add subdivision
-    bpy.ops.object.mode_set(mode='EDIT')
-    bpy.ops.mesh.select_all(action='SELECT')
+    for block in bpy.data.armatures:
+        if block.users == 0:
+            bpy.data.armatures.remove(block)
 
-    # Subdivide multiple times to create edge loops
-    # This replaces loopcut_slide which doesn't work in headless mode
-    bpy.ops.mesh.subdivide(number_cuts=1)  # First subdivision
-    bpy.ops.mesh.subdivide(number_cuts=1)  # Second subdivision for more topology
+# Target mesh names to look for (in order of preference)
+TARGET_MESHES = [
+    "GEO-body_male_realistic",
+    "GEO-body_male_stylized",
+    "GEO-body_female_realistic",
+    "GEO-body_female_stylized",
+]
 
-    bpy.ops.object.mode_set(mode='OBJECT')
+def import_human_base():
+    """Import the human base mesh from the source file"""
+    print(f"Importing human base mesh from: {INPUT_PATH}")
 
-    # Add subdivision surface modifier
-    subsurf = torso.modifiers.new(name="Subdivision", type='SUBSURF')
-    subsurf.levels = 2
-    subsurf.render_levels = 3
+    if not os.path.exists(INPUT_PATH):
+        raise FileNotFoundError(f"Human base mesh not found: {INPUT_PATH}")
 
-    return torso
+    # Check file size to ensure it's not just an LFS pointer
+    file_size = os.path.getsize(INPUT_PATH)
+    if file_size < 1000:  # LFS pointers are tiny
+        raise RuntimeError(
+            f"File appears to be a Git LFS pointer ({file_size} bytes). "
+            "Run 'git lfs pull' to download the actual file."
+        )
 
-def create_head_neck():
-    """Create head and neck as single mesh"""
-    # Neck cylinder
-    bpy.ops.mesh.primitive_cylinder_add(
-        vertices=16,
-        radius=0.12,
-        depth=0.25,
-        location=(0, 0, 1.45)
-    )
-    neck_head = bpy.context.active_object
-    neck_head.name = "HeadNeck"
+    # First, check what objects are available
+    with bpy.data.libraries.load(INPUT_PATH, link=False) as (data_from, data_to):
+        available_objects = list(data_from.objects)
 
-    bpy.ops.object.mode_set(mode='EDIT')
-    bm = bmesh.from_edit_mesh(neck_head.data)
+    # Find target mesh name
+    target_name = None
+    for name in TARGET_MESHES:
+        if name in available_objects:
+            target_name = name
+            print(f"  Found target mesh: {name}")
+            break
 
-    # Extrude top to create head
-    top_verts = [v for v in bm.verts if v.co.z > 1.5]
-    for v in top_verts:
-        v.select = True
+    if not target_name:
+        # Fall back to finding any full body mesh
+        for name in available_objects:
+            if "body" in name.lower() and ("male" in name.lower() or "female" in name.lower()):
+                if "primitive" not in name.lower():
+                    target_name = name
+                    print(f"  Found fallback body mesh: {name}")
+                    break
 
-    bpy.ops.mesh.extrude_region_move(
-        TRANSFORM_OT_translate={"value": (0, 0, 0.3)}
-    )
+    if not target_name:
+        raise RuntimeError(f"No suitable body mesh found in {INPUT_PATH}")
 
-    # Scale head
-    bpy.ops.transform.resize(value=(1.8, 1.4, 1.2))
+    # Import only the target mesh
+    with bpy.data.libraries.load(INPUT_PATH, link=False) as (data_from, data_to):
+        data_to.objects = [target_name]
 
-    bmesh.update_edit_mesh(neck_head.data)
-    bpy.ops.object.mode_set(mode='OBJECT')
+    # Link imported object to scene
+    imported_meshes = []
 
-    # Subdivision
-    subsurf = neck_head.modifiers.new(name="Subdivision", type='SUBSURF')
-    subsurf.levels = 2
-    subsurf.render_levels = 3
+    for obj in data_to.objects:
+        if obj is not None:
+            bpy.context.collection.objects.link(obj)
+            if obj.type == 'MESH':
+                imported_meshes.append(obj)
+                print(f"  ✓ Imported mesh: {obj.name} ({len(obj.data.vertices)} verts)")
 
-    return neck_head
+    if not imported_meshes:
+        raise RuntimeError(f"Failed to import {target_name}")
 
-def create_arm(side='L'):
-    """Create arm with proper joint topology"""
-    sign = 1 if side == 'L' else -1
+    main_mesh = imported_meshes[0]
 
-    # Upper arm
-    bpy.ops.mesh.primitive_cylinder_add(
-        vertices=12,
-        radius=0.08,
-        depth=0.35,
-        location=(sign * 0.45, 0, 1.15),
-        rotation=(0, math.radians(15 * sign), 0)
-    )
-    arm = bpy.context.active_object
-    arm.name = f"Arm_{side}"
+    # Make mesh data single-user if it's shared
+    if main_mesh.data.users > 1:
+        print(f"  Making mesh data single-user...")
+        main_mesh.data = main_mesh.data.copy()
 
-    bpy.ops.object.mode_set(mode='EDIT')
-    bpy.ops.mesh.subdivide(number_cuts=2)
-    bpy.ops.object.mode_set(mode='OBJECT')
+    print(f"\n  Main body mesh: {main_mesh.name}")
 
-    # Forearm
-    bpy.ops.mesh.primitive_cylinder_add(
-        vertices=12,
-        radius=0.07,
-        depth=0.30,
-        location=(sign * 0.50, 0.15, 0.85),
-        rotation=(math.radians(-30), 0, 0)
-    )
-    forearm = bpy.context.active_object
-    forearm.name = f"Forearm_{side}"
+    return main_mesh, imported_meshes, []
 
-    bpy.ops.object.mode_set(mode='EDIT')
-    bpy.ops.mesh.subdivide(number_cuts=2)
-    bpy.ops.object.mode_set(mode='OBJECT')
+def prepare_base_mesh(main_mesh, all_meshes, armatures):
+    """
+    Prepare the imported mesh for use as avatar base.
+    - Scale to appropriate size
+    - Center and position
+    - Clean up
+    """
+    print("\nPreparing base mesh...")
 
-    # Hand stub (will be replaced with blade hands later)
-    bpy.ops.mesh.primitive_cylinder_add(
-        vertices=8,
-        radius=0.06,
-        depth=0.15,
-        location=(sign * 0.52, 0.35, 0.75),
-        rotation=(math.radians(-45), 0, 0)
-    )
-    hand = bpy.context.active_object
-    hand.name = f"Hand_{side}"
-
-    # Join arm parts
+    # Select all imported objects
     bpy.ops.object.select_all(action='DESELECT')
-    arm.select_set(True)
-    forearm.select_set(True)
-    hand.select_set(True)
-    bpy.context.view_layer.objects.active = arm
-    bpy.ops.object.join()
+    for obj in all_meshes:
+        obj.select_set(True)
+    for arm in armatures:
+        arm.select_set(True)
 
-    # Subdivision
-    subsurf = arm.modifiers.new(name="Subdivision", type='SUBSURF')
-    subsurf.levels = 2
-    subsurf.render_levels = 3
+    bpy.context.view_layer.objects.active = main_mesh
 
-    return arm
+    # Reset transforms first
+    bpy.ops.object.transform_apply(location=True, rotation=True, scale=True)
 
-def create_leg(side='L'):
-    """Create kneeling leg with proper topology"""
-    sign = 1 if side == 'L' else -1
+    # Get current bounds
+    min_z = min(v.co.z for v in main_mesh.data.vertices)
+    max_z = max(v.co.z for v in main_mesh.data.vertices)
+    current_height = max_z - min_z
 
-    # Thigh (angled for kneeling)
-    bpy.ops.mesh.primitive_cylinder_add(
-        vertices=16,
-        radius=0.11,
-        depth=0.45,
-        location=(sign * 0.15, -0.05, 0.70),
-        rotation=(math.radians(-60), 0, 0)
-    )
-    leg = bpy.context.active_object
-    leg.name = f"Leg_{side}"
+    # Target height for kneeling pose (approximately 1.0-1.2m for kneeling figure)
+    # The full standing height would be ~1.8m
+    target_height = 1.2
 
-    bpy.ops.object.mode_set(mode='EDIT')
-    bpy.ops.mesh.subdivide(number_cuts=3)
-    bpy.ops.object.mode_set(mode='OBJECT')
+    if current_height > 0:
+        scale_factor = target_height / current_height
+        print(f"  Scaling from {current_height:.2f}m to {target_height:.2f}m (factor: {scale_factor:.3f})")
 
-    # Shin (vertical, kneeling)
-    bpy.ops.mesh.primitive_cylinder_add(
-        vertices=16,
-        radius=0.09,
-        depth=0.40,
-        location=(sign * 0.15, 0.15, 0.25)
-    )
-    shin = bpy.context.active_object
-    shin.name = f"Shin_{side}"
+        # Apply uniform scale
+        for obj in all_meshes + armatures:
+            obj.scale = (scale_factor, scale_factor, scale_factor)
 
-    bpy.ops.object.mode_set(mode='EDIT')
-    bpy.ops.mesh.subdivide(number_cuts=3)
-    bpy.ops.object.mode_set(mode='OBJECT')
+        bpy.ops.object.transform_apply(location=True, rotation=True, scale=True)
 
-    # Foot (flat on ground)
-    bpy.ops.mesh.primitive_cube_add(
-        size=0.18,
-        location=(sign * 0.15, 0.22, 0.05)
-    )
-    foot = bpy.context.active_object
-    foot.name = f"Foot_{side}"
-    foot.scale = (0.8, 1.5, 0.5)
-    bpy.ops.object.transform_apply(scale=True)
+    # Recalculate bounds after scaling
+    min_z = min(v.co.z for v in main_mesh.data.vertices)
 
-    # Join leg parts
-    bpy.ops.object.select_all(action='DESELECT')
-    leg.select_set(True)
-    shin.select_set(True)
-    foot.select_set(True)
-    bpy.context.view_layer.objects.active = leg
-    bpy.ops.object.join()
+    # Move so feet are at ground level (z=0)
+    z_offset = -min_z
+    for obj in all_meshes + armatures:
+        obj.location.z += z_offset
 
-    # Subdivision
-    subsurf = leg.modifiers.new(name="Subdivision", type='SUBSURF')
-    subsurf.levels = 2
-    subsurf.render_levels = 3
+    bpy.ops.object.transform_apply(location=True, rotation=True, scale=True)
 
-    return leg
+    # Center on X and Y
+    bounds_min = Vector((float('inf'), float('inf'), float('inf')))
+    bounds_max = Vector((float('-inf'), float('-inf'), float('-inf')))
 
-def merge_basemesh(parts):
-    """Merge all body parts into single mesh with proper topology"""
-    bpy.ops.object.select_all(action='DESELECT')
+    for v in main_mesh.data.vertices:
+        for i in range(3):
+            bounds_min[i] = min(bounds_min[i], v.co[i])
+            bounds_max[i] = max(bounds_max[i], v.co[i])
 
-    for part in parts:
-        part.select_set(True)
+    center_x = (bounds_min.x + bounds_max.x) / 2
+    center_y = (bounds_min.y + bounds_max.y) / 2
 
-    bpy.context.view_layer.objects.active = parts[0]
-    bpy.ops.object.join()
+    for obj in all_meshes + armatures:
+        obj.location.x -= center_x
+        obj.location.y -= center_y
 
-    basemesh = bpy.context.active_object
-    basemesh.name = "PenitentMechanism_Base"
+    bpy.ops.object.transform_apply(location=True, rotation=True, scale=True)
 
-    # Apply all modifiers
-    bpy.ops.object.mode_set(mode='OBJECT')
-    for modifier in basemesh.modifiers:
-        bpy.ops.object.modifier_apply(modifier=modifier.name)
+    print(f"  ✓ Mesh positioned at origin, grounded at z=0")
+
+    return main_mesh
+
+def finalize_base_mesh(main_mesh, all_meshes):
+    """
+    Final cleanup and preparation for export.
+    """
+    print("\nFinalizing base mesh...")
+
+    # Rename main mesh
+    main_mesh.name = "PenitentMechanism_Base"
+    if main_mesh.data:
+        main_mesh.data.name = "PenitentMechanism_Base"
 
     # Clean up geometry
+    bpy.context.view_layer.objects.active = main_mesh
     bpy.ops.object.mode_set(mode='EDIT')
     bpy.ops.mesh.select_all(action='SELECT')
-    bpy.ops.mesh.remove_doubles(threshold=0.001)
+    bpy.ops.mesh.remove_doubles(threshold=0.0001)
     bpy.ops.mesh.normals_make_consistent(inside=False)
     bpy.ops.object.mode_set(mode='OBJECT')
 
-    # Final subdivision modifier (leave unapplied for flexibility)
-    subsurf = basemesh.modifiers.new(name="Subdivision", type='SUBSURF')
-    subsurf.levels = 1
-    subsurf.render_levels = 2
-
     # Smooth shading
     bpy.ops.object.shade_smooth()
-    basemesh.data.use_auto_smooth = True
-    basemesh.data.auto_smooth_angle = math.radians(30)
+    main_mesh.data.use_auto_smooth = True
+    main_mesh.data.auto_smooth_angle = math.radians(30)
 
-    return basemesh
+    # Remove any other mesh objects (keep only main body)
+    for obj in all_meshes:
+        if obj != main_mesh:
+            bpy.data.objects.remove(obj, do_unlink=True)
+
+    print(f"  ✓ Finalized: {main_mesh.name}")
+
+    return main_mesh
 
 def main():
-    """Generate and save base mesh"""
-    print("=" * 60)
-    print("BASE MESH GENERATOR - The Penitent Mechanism")
-    print("=" * 60)
+    """Import and prepare human base mesh for avatar generation"""
+    print("=" * 70)
+    print("BASE MESH GENERATOR V4.0 - The Penitent Mechanism")
+    print("Importing pre-modeled human base mesh")
+    print("=" * 70)
 
-    print("\nClearing scene...")
+    print("\n[1/4] Clearing scene...")
     clear_scene()
 
-    print("Creating torso...")
-    torso = create_torso_base()
+    print("\n[2/4] Importing human base mesh...")
+    main_mesh, all_meshes, armatures = import_human_base()
 
-    print("Creating head and neck...")
-    head_neck = create_head_neck()
+    print("\n[3/4] Preparing base mesh...")
+    main_mesh = prepare_base_mesh(main_mesh, all_meshes, armatures)
 
-    print("Creating arms...")
-    arm_l = create_arm('L')
-    arm_r = create_arm('R')
+    print("\n[4/4] Finalizing...")
+    basemesh = finalize_base_mesh(main_mesh, all_meshes)
 
-    print("Creating legs (kneeling pose)...")
-    leg_l = create_leg('L')
-    leg_r = create_leg('R')
-
-    print("\nMerging into single base mesh...")
-    parts = [torso, head_neck, arm_l, arm_r, leg_l, leg_r]
-    basemesh = merge_basemesh(parts)
-
-    print(f"\n✓ Base mesh created:")
+    # Final statistics
+    print(f"\n{'='*70}")
+    print("BASE MESH READY")
+    print('='*70)
     print(f"  Name: {basemesh.name}")
     print(f"  Vertices: {len(basemesh.data.vertices)}")
     print(f"  Faces: {len(basemesh.data.polygons)}")
+    print(f"  Triangles: {sum(len(p.vertices) - 2 for p in basemesh.data.polygons)}")
+
+    # Calculate bounds
+    min_z = min(v.co.z for v in basemesh.data.vertices)
+    max_z = max(v.co.z for v in basemesh.data.vertices)
+    print(f"  Height: {max_z - min_z:.2f}m")
 
     print(f"\nSaving to: {OUTPUT_PATH}")
     bpy.ops.wm.save_as_mainfile(filepath=OUTPUT_PATH)
     print("✓ Base mesh saved!")
 
-    print("\n" + "=" * 60)
-    print("✓ BASE MESH GENERATION COMPLETE!")
-    print("=" * 60)
+    print("\n" + "=" * 70)
+    print("✓ BASE MESH IMPORT COMPLETE!")
+    print("High-quality anatomical mesh ready for kitbashing.")
+    print("=" * 70)
 
 if __name__ == "__main__":
     main()

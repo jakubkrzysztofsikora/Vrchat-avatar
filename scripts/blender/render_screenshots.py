@@ -235,14 +235,20 @@ def get_avatar_bounds():
 
     return bounds_center, bounds_size
 
-def get_rig_target(rig):
+def get_rig_target(rig, bounds_center=None, bounds_size=None):
     """Return a point for the camera to look at (chest/head area, not feet)."""
+    # Use actual bounds if available
+    if bounds_center and bounds_size:
+        # Target upper third of the model (chest/head area)
+        target_z = bounds_center.z + bounds_size.z * 0.15
+        return Vector((bounds_center.x, bounds_center.y, target_z))
+
     if rig:
-        # Target the chest/head area, not the armature origin (which is at feet)
-        # Avatar is ~1.8m kneeling, so chest/head is around 1.3-1.5m
+        # Fallback: use rig origin + estimated offset
         rig_origin = rig.matrix_world.translation
         chest_height = Vector((rig_origin.x, rig_origin.y, rig_origin.z + 1.4))
         return chest_height
+
     return Vector((0.0, 0.0, 1.4))
 
 
@@ -256,27 +262,39 @@ def point_camera_at(camera, target_point):
 
 
 def position_camera_for_view(camera, view_type, rig, bounds_center, bounds_size):
-    """Position camera for specific view"""
+    """Position camera for specific view using actual mesh bounds"""
     print(f"Positioning camera for {view_type}...")
 
-    target_point = get_rig_target(rig)
+    target_point = get_rig_target(rig, bounds_center, bounds_size)
     print(f"  Camera target: {target_point}")
+    print(f"  Bounds center: {bounds_center}, size: {bounds_size}")
 
-    # Full body shots - camera positioned to show entire avatar
+    # Calculate camera distance based on model size
+    model_height = bounds_size.z if bounds_size else 2.0
+    model_width = max(bounds_size.x, bounds_size.y) if bounds_size else 1.0
+
+    # Camera Z position at chest level (upper third of model)
+    cam_z = bounds_center.z + bounds_size.z * 0.1 if bounds_center else 1.2
+
+    # Full body shots - camera distance scales with model size
+    full_body_distance = max(4.0, model_height * 2.5)
+
     if view_type == 'front':
-        camera.location = (0, -5.5, 1.2)  # Further back to capture full body
+        camera.location = (bounds_center.x, bounds_center.y - full_body_distance, cam_z)
         camera.data.lens = 35  # Wider lens
         print(f"  Front view: camera at {camera.location}, lens {camera.data.lens}mm")
 
     elif view_type == 'back':
-        camera.location = (0, 5.5, 1.2)
+        camera.location = (bounds_center.x, bounds_center.y + full_body_distance, cam_z)
         camera.data.lens = 35
         print(f"  Back view: camera at {camera.location}, lens {camera.data.lens}mm")
 
     elif view_type == 'face':
-        # Close-up of face/mechanical eye
-        face_target = Vector((target_point.x, target_point.y, target_point.z + 0.3))  # Aim at head
-        camera.location = (0.3, -1.2, 1.95)  # Offset to right side (mechanical side)
+        # Close-up of face/head - target top of model
+        head_z = bounds_center.z + bounds_size.z * 0.35 if bounds_center else 1.6
+        face_target = Vector((bounds_center.x, bounds_center.y, head_z))
+        # Camera close to face, slightly to the side
+        camera.location = (bounds_center.x + 0.3, bounds_center.y - 1.2, head_z + 0.1)
         camera.data.lens = 85  # Portrait lens
         point_camera_at(camera, face_target)
         print(f"  Face closeup: camera at {camera.location}, targeting {face_target}")
@@ -284,13 +302,17 @@ def position_camera_for_view(camera, view_type, rig, bounds_center, bounds_size)
 
     elif view_type == 'pose1':
         # Prayer unfold - 3/4 side view to show arms raising
-        camera.location = (3.5, -2.5, 1.2)
+        camera.location = (bounds_center.x + full_body_distance * 0.6,
+                          bounds_center.y - full_body_distance * 0.5,
+                          cam_z)
         camera.data.lens = 40
         print(f"  Pose 1 (prayer unfold): camera at {camera.location}, lens {camera.data.lens}mm")
 
     elif view_type == 'pose2':
         # Meditation glitch - front 3/4 view showing head rotation
-        camera.location = (1.8, -4.0, 1.4)
+        camera.location = (bounds_center.x + full_body_distance * 0.3,
+                          bounds_center.y - full_body_distance * 0.8,
+                          cam_z + 0.2)
         camera.data.lens = 45
         print(f"  Pose 2 (meditation glitch): camera at {camera.location}, lens {camera.data.lens}mm")
 
