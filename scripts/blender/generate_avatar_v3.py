@@ -127,9 +127,15 @@ def merge_all_meshes(base_mesh, armature):
     base_mesh.select_set(True)
     bpy.context.view_layer.objects.active = base_mesh
 
-    # Select all other meshes
+    # Select all other meshes (excluding Rigify widgets)
     for obj in bpy.context.scene.objects:
         if obj.type == 'MESH' and obj != base_mesh:
+            # Skip Rigify widget objects (they're in a different collection)
+            if obj.name.startswith('WGT-'):
+                continue
+            # Check if object is in current view layer
+            if obj.name not in bpy.context.view_layer.objects:
+                continue
             obj.select_set(True)
             # Apply all modifiers (Bevels etc) before joining to freeze geometry
             # But do NOT apply Armature modifiers if they exist
