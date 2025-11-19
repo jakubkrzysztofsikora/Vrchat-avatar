@@ -653,6 +653,119 @@ def add_body_segmentation(base_mesh):
     bmesh.update_edit_mesh(base_mesh.data)
     bpy.ops.object.mode_set(mode='OBJECT')
 
+def add_body_armor(base_mesh, armature):
+    """Add armor plates to cover the body - chest, arms, legs"""
+    print("Adding body armor plates...")
+
+    armor_parts = []
+
+    # Get mesh bounds for positioning
+    center, (min_z, max_z) = get_mesh_bounds(base_mesh)
+    if not center:
+        center = Vector((0, 0, 1.0))
+        min_z, max_z = 0, 2.0
+    height = max_z - min_z
+
+    # 1. CHEST PLATE
+    chest_z = min_z + height * 0.65
+    bpy.ops.mesh.primitive_cube_add(
+        size=0.3,
+        location=(center.x, center.y - 0.08, chest_z)
+    )
+    chest = bpy.context.active_object
+    chest.name = "Armor_Chest"
+    chest.scale = (0.8, 0.3, 1.2)
+    bpy.ops.object.transform_apply(scale=True)
+
+    # Add bevel for armor plate look
+    bevel = chest.modifiers.new(name="Bevel", type='BEVEL')
+    bevel.width = 0.008
+    bevel.segments = 2
+    armor_parts.append(chest)
+
+    # 2. SHOULDER PAULDRONS (both sides)
+    for side in [-1, 1]:
+        shoulder_x = center.x + side * 0.18
+        shoulder_z = min_z + height * 0.75
+
+        bpy.ops.mesh.primitive_uv_sphere_add(
+            segments=12,
+            ring_count=8,
+            radius=0.08,
+            location=(shoulder_x, center.y - 0.02, shoulder_z)
+        )
+        pauldron = bpy.context.active_object
+        pauldron.name = f"Armor_Pauldron_{'L' if side == 1 else 'R'}"
+        pauldron.scale = (1.0, 0.6, 0.8)
+        bpy.ops.object.transform_apply(scale=True)
+        armor_parts.append(pauldron)
+
+    # 3. ARM GUARDS (forearms)
+    for side in [-1, 1]:
+        arm_bone, arm_pos = find_bone_by_pattern(armature, [f'forearm.{"L" if side == 1 else "R"}', 'forearm'])
+
+        if arm_pos:
+            guard_pos = arm_pos
+        else:
+            guard_pos = Vector((center.x + side * 0.25, center.y + 0.1, min_z + height * 0.50))
+
+        bpy.ops.mesh.primitive_cylinder_add(
+            vertices=12,
+            radius=0.04,
+            depth=0.15,
+            location=guard_pos
+        )
+        guard = bpy.context.active_object
+        guard.name = f"Armor_Forearm_{'L' if side == 1 else 'R'}"
+        guard.rotation_euler = (math.radians(90), 0, math.radians(side * 20))
+        armor_parts.append(guard)
+
+    # 4. THIGH GUARDS
+    for side in [-1, 1]:
+        thigh_x = center.x + side * 0.10
+        thigh_z = min_z + height * 0.35
+
+        bpy.ops.mesh.primitive_cube_add(
+            size=0.12,
+            location=(thigh_x, center.y - 0.03, thigh_z)
+        )
+        thigh = bpy.context.active_object
+        thigh.name = f"Armor_Thigh_{'L' if side == 1 else 'R'}"
+        thigh.scale = (0.8, 0.5, 1.5)
+        bpy.ops.object.transform_apply(scale=True)
+        armor_parts.append(thigh)
+
+    # 5. LOIN CLOTH / TASSET (front hanging armor)
+    loin_z = min_z + height * 0.42
+    bpy.ops.mesh.primitive_cube_add(
+        size=0.15,
+        location=(center.x, center.y - 0.06, loin_z)
+    )
+    loin = bpy.context.active_object
+    loin.name = "Armor_Tasset"
+    loin.scale = (1.2, 0.15, 1.5)
+    bpy.ops.object.transform_apply(scale=True)
+    armor_parts.append(loin)
+
+    # 6. BACK PLATE
+    back_z = min_z + height * 0.60
+    bpy.ops.mesh.primitive_cube_add(
+        size=0.25,
+        location=(center.x, center.y + 0.10, back_z)
+    )
+    back = bpy.context.active_object
+    back.name = "Armor_Back"
+    back.scale = (0.7, 0.2, 1.0)
+    bpy.ops.object.transform_apply(scale=True)
+    armor_parts.append(back)
+
+    # Parent all armor to base mesh
+    for part in armor_parts:
+        part.parent = base_mesh
+
+    print(f"    ✓ Added {len(armor_parts)} armor pieces")
+    return armor_parts
+
 def add_neck_segments(base_mesh, armature):
     """Add segmented neck rings for unnatural head rotation"""
     print("Adding segmented neck rings...")
@@ -730,23 +843,30 @@ def add_shoulder_mechanism(base_mesh, armature):
             bpy.context.view_layer.objects.active = shoulder
             bpy.ops.object.join()
 
+        # Scale down the shoulder mechanism
+        shoulder.scale = (0.5, 0.5, 0.5)
+        bpy.ops.object.select_all(action='DESELECT')
+        shoulder.select_set(True)
+        bpy.context.view_layer.objects.active = shoulder
+        bpy.ops.object.transform_apply(scale=True)
+
         # Find shoulder bone position
         shoulder_bone, shoulder_pos = find_bone_by_pattern(armature, ['shoulder', 'clavicle', 'upper_arm'])
 
         if shoulder_pos:
-            # Position relative to bone
-            shoulder.location = shoulder_pos + Vector((0.08, -0.05, 0.05))
+            # Position on top of shoulder, not floating
+            shoulder.location = shoulder_pos + Vector((0.05, 0, 0.02))
             print(f"    Positioned at bone '{shoulder_bone}': {shoulder.location}")
         else:
             # Fallback: use mesh bounds
             center, (min_z, max_z) = get_mesh_bounds(base_mesh)
             if center:
-                shoulder.location = (center.x + 0.20, center.y - 0.05, max_z * 0.75)
+                shoulder.location = (center.x + 0.15, center.y, max_z * 0.80)
             else:
-                shoulder.location = (0.22, -0.05, 1.20)
+                shoulder.location = (0.15, 0, 1.35)
             print(f"    Using fallback position: {shoulder.location}")
 
-        shoulder.rotation_euler = (0, 0, math.radians(-10))
+        shoulder.rotation_euler = (0, 0, math.radians(-15))
 
         # Parent to shoulder bone
         if armature and shoulder_bone:
@@ -777,20 +897,27 @@ def add_mechanical_halo(base_mesh, armature):
             bpy.context.view_layer.objects.active = halo
             bpy.ops.object.join()
 
+        # Scale down the halo significantly
+        halo.scale = (0.4, 0.4, 0.4)
+        bpy.ops.object.select_all(action='DESELECT')
+        halo.select_set(True)
+        bpy.context.view_layer.objects.active = halo
+        bpy.ops.object.transform_apply(scale=True)
+
         # Find head bone position
         head_bone, head_pos = find_bone_by_pattern(armature, ['head', 'skull'])
 
         if head_pos:
-            # Position above head bone (halo floats above)
-            halo.location = head_pos + Vector((0, 0.05, 0.25))
+            # Position just behind and above head (like a saint's halo)
+            halo.location = head_pos + Vector((0, 0.08, 0.12))
             print(f"    Positioned above bone '{head_bone}': {halo.location}")
         else:
             # Fallback: use mesh bounds
             center, (min_z, max_z) = get_mesh_bounds(base_mesh)
             if center:
-                halo.location = (center.x, center.y + 0.05, max_z + 0.15)
+                halo.location = (center.x, center.y + 0.08, max_z + 0.05)
             else:
-                halo.location = (0, 0.10, 1.90)
+                halo.location = (0, 0.08, 1.75)
             print(f"    Using fallback position: {halo.location}")
 
         halo.rotation_euler = (math.radians(15), 0, 0)
@@ -1024,6 +1151,12 @@ def main():
         neck = add_neck_segments(basemesh, armature)
         if neck:
             neck.data.materials.append(mat_bronze)
+
+        # 3e: Add body armor to cover the body
+        armor_parts = add_body_armor(basemesh, armature)
+        for part in armor_parts:
+            if not part.data.materials:
+                part.data.materials.append(mat_bronze)
 
         print("  ✓ Body transformation complete")
         print()
