@@ -308,7 +308,7 @@ def main():
 
     try:
         # Load the rigged avatar
-        blend_file = os.path.abspath("Avatar/ForgottenArchitect.blend")
+        blend_file = os.path.abspath("Avatar/PenitentMechanism.blend")
         print(f"Loading avatar file: {blend_file}")
 
         if not os.path.exists(blend_file):

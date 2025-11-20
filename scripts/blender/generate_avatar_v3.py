@@ -21,7 +21,7 @@ from mathutils import Vector, Euler
 # Paths
 BASEMESH_PATH = os.path.abspath("Avatar/BaseMeshes/PenitentMechanism_Base.blend")
 KITBASH_DIR = os.path.abspath("Avatar/Kitbash/")
-OUTPUT_PATH = os.path.abspath("Avatar/ForgottenArchitect.blend")
+OUTPUT_PATH = os.path.abspath("Avatar/PenitentMechanism.blend")
 
 # Configuration
 KNEELING_HEIGHT = 1.8  # meters

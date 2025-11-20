@@ -367,7 +367,7 @@ def main():
     os.makedirs(OUTPUT_DIR, exist_ok=True)
 
     # Load the avatar
-    blend_file = os.path.abspath("Avatar/ForgottenArchitect.blend")
+    blend_file = os.path.abspath("Avatar/PenitentMechanism.blend")
     if os.path.exists(blend_file):
         bpy.ops.wm.open_mainfile(filepath=blend_file)
     else:

@@ -7,7 +7,7 @@ Exports the final avatar with all animations for Unity import
 import bpy
 import os
 
-OUTPUT_PATH = os.path.abspath("Avatar/ForgottenArchitect.fbx")
+OUTPUT_PATH = os.path.abspath("Avatar/PenitentMechanism.fbx")
 
 def prepare_for_export():
     """Prepare scene for Unity-compatible FBX export"""
@@ -105,7 +105,7 @@ def main():
 
     try:
         # Load the final avatar
-        blend_file = os.path.abspath("Avatar/ForgottenArchitect.blend")
+        blend_file = os.path.abspath("Avatar/PenitentMechanism.blend")
         print(f"Loading avatar file: {blend_file}")
 
         if not os.path.exists(blend_file):

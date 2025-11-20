@@ -123,7 +123,7 @@ jobs:
           fi
 
           # Check if blend file was created/updated
-          if [ ! -f "Avatar/ForgottenArchitect.blend" ]; then
+          if [ ! -f "Avatar/PenitentMechanism.blend" ]; then
             echo "ERROR: Avatar generation failed - no output file!"
             cat blender_generate.log
             exit 1
@@ -160,7 +160,7 @@ jobs:
           /opt/blender/blender --background --enable-autoexec --python scripts/blender/export_fbx.py 2>&1 | tee blender_export.log
 
           # Check if FBX was created
-          if [ ! -f "Avatar/ForgottenArchitect.fbx" ]; then
+          if [ ! -f "Avatar/PenitentMechanism.fbx" ]; then
             echo "ERROR: FBX export failed!"
             cat blender_export.log
             exit 1
@@ -296,10 +296,10 @@ jobs:
       - name: Upload Avatar Package
         uses: actions/upload-artifact@v4
         with:
-          name: ForgottenArchitect-Avatar
+          name: PenitentMechanism-Avatar
           path: |
-            Avatar/ForgottenArchitect.fbx
-            Avatar/ForgottenArchitect.blend
+            Avatar/PenitentMechanism.fbx
+            Avatar/PenitentMechanism.blend
             Avatar/BaseMeshes/
             Avatar/Kitbash/
             Avatar/Textures/
@@ -329,7 +329,7 @@ jobs:
       - name: Build Summary
         if: success()
         run: |
-          echo "## 🎭 The Forgotten Architect - Build Complete! 🎭" >> $GITHUB_STEP_SUMMARY
+          echo "## 🎭 The Penitent Mechanism - Build Complete! 🎭" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### Generated Assets:" >> $GITHUB_STEP_SUMMARY
           echo "- ✅ 3D Model (procedurally generated)" >> $GITHUB_STEP_SUMMARY
@@ -341,8 +341,8 @@ jobs:
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### Avatar Stats:" >> $GITHUB_STEP_SUMMARY
 
-          if [ -f "Avatar/ForgottenArchitect.fbx" ]; then
-            SIZE=$(du -h Avatar/ForgottenArchitect.fbx | cut -f1)
+          if [ -f "Avatar/PenitentMechanism.fbx" ]; then
+            SIZE=$(du -h Avatar/PenitentMechanism.fbx | cut -f1)
             echo "- FBX Size: $SIZE" >> $GITHUB_STEP_SUMMARY
           fi
 
@@ -356,7 +356,7 @@ jobs:
           echo "1. Download the artifact from this workflow run" >> $GITHUB_STEP_SUMMARY
           echo "2. Open \`Project/\` in Unity 2022.3.22f1" >> $GITHUB_STEP_SUMMARY
           echo "3. Install VRChat SDK3 via VCC if not auto-installed" >> $GITHUB_STEP_SUMMARY
-          echo "4. Open the \`ForgottenArchitect.prefab\`" >> $GITHUB_STEP_SUMMARY
+          echo "4. Open the \`PenitentMechanism.prefab\`" >> $GITHUB_STEP_SUMMARY
           echo "5. Test in VRChat!" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "**The avatar is 100% plug-and-play!** 🚀" >> $GITHUB_STEP_SUMMARY
