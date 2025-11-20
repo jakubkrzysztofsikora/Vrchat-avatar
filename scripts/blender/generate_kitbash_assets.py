@@ -503,6 +503,94 @@ def generate_cable_cluster():
     print(f"  ✓ Saved: {filepath}")
 
 # ============================================================================
+# HIGH-FIDELITY ARMOR SET
+# ============================================================================
+
+def generate_armor_set():
+    """Generate main body armor (Chest, Thighs, Arms) with high detail"""
+    print("Generating Armor Set...")
+    clear_scene()
+
+    # 1. CHEST PLATE (Cuirass)
+    # Start with cylinder segment for curvature, not a cube
+    bpy.ops.mesh.primitive_cylinder_add(vertices=64, radius=0.28, depth=0.35)
+    chest = bpy.context.active_object
+    chest.name = "Armor_Chest"
+
+    # Sculpt shape: Flatten front/back, widen shoulders
+    chest.scale = (1.0, 0.7, 1.0)
+    bpy.ops.object.transform_apply(scale=True)
+
+    # Add heavy bevel chamfer
+    add_high_quality_modifiers(chest, bevel_width=0.01)
+
+    # Add central ridge detail
+    bpy.ops.mesh.primitive_cube_add(size=1, location=(0, -0.2, 0))
+    ridge = bpy.context.active_object
+    ridge.scale = (0.08, 0.05, 0.30)
+    bpy.ops.object.transform_apply(scale=True)
+    add_high_quality_modifiers(ridge, bevel_width=0.005)
+
+    # Join Ridge
+    bpy.ops.object.select_all(action='DESELECT')
+    ridge.select_set(True)
+    chest.select_set(True)
+    bpy.context.view_layer.objects.active = chest
+    bpy.ops.object.join()
+
+    # 2. THIGH PLATES (Tassets)
+    # Curved shield-like plates
+    bpy.ops.mesh.primitive_cube_add(size=1, location=(0.15, -0.1, -0.4))
+    thigh = bpy.context.active_object
+    thigh.name = "Armor_Thigh_L"
+    thigh.scale = (0.15, 0.05, 0.25)
+    bpy.ops.object.transform_apply(scale=True)
+
+    # Bend modifier to curve around leg
+    bend = thigh.modifiers.new(name='Bend', type='SIMPLE_DEFORM')
+    bend.deform_method = 'BEND'
+    bend.angle = math.radians(45)
+    bend.deform_axis = 'Z'
+
+    # Apply bend immediately to bake geometry
+    bpy.context.view_layer.objects.active = thigh
+    bpy.ops.object.modifier_apply(modifier="Bend")
+    add_high_quality_modifiers(thigh, bevel_width=0.005)
+
+    # 3. ARM GUARDS (Vambraces)
+    bpy.ops.mesh.primitive_cylinder_add(vertices=32, radius=0.06, depth=0.22)
+    arm = bpy.context.active_object
+    arm.name = "Armor_Forearm_L"
+    arm.location = (0.4, 0, 0)
+
+    # Taper
+    taper = arm.modifiers.new(name='Taper', type='SIMPLE_DEFORM')
+    taper.deform_method = 'TAPER'
+    taper.factor = 0.3
+    bpy.context.view_layer.objects.active = arm
+    bpy.ops.object.modifier_apply(modifier="Taper")
+    add_high_quality_modifiers(arm, bevel_width=0.003)
+
+    # 4. SHOULDER PAULDRONS (Replace sphere with layered plates)
+    bpy.ops.mesh.primitive_uv_sphere_add(segments=32, ring_count=16, radius=0.12)
+    pauldron = bpy.context.active_object
+    pauldron.name = "Armor_Pauldron_L"
+    pauldron.location = (0.3, 0, 0.3)
+
+    # Cut in half
+    bpy.ops.object.mode_set(mode='EDIT')
+    bpy.ops.mesh.select_all(action='SELECT')
+    bpy.ops.mesh.bisect(plane_co=(0,0,0), plane_no=(0,0,1), clear_inner=True)
+    bpy.ops.object.mode_set(mode='OBJECT')
+
+    add_high_quality_modifiers(pauldron, bevel_width=0.005)
+
+    # Save Armor Kit
+    filepath = OUTPUT_DIR + "Armor_Set_01.blend"
+    bpy.ops.wm.save_as_mainfile(filepath=filepath)
+    print(f"  ✓ Saved: {filepath}")
+
+# ============================================================================
 # MAIN
 # ============================================================================
 
@@ -518,6 +606,7 @@ def main():
         ("Blade Hand (Left)", lambda: generate_blade_hand(True)),
         ("Blade Hand (Right)", lambda: generate_blade_hand(False)),
         ("Cable Cluster", generate_cable_cluster),
+        ("High-Res Armor Set", generate_armor_set),
     ]
 
     for name, func in assets:
