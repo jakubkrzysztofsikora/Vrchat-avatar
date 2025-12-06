@@ -14,6 +14,8 @@
 
 ## 🌀 Concept
 
+![The Penitent Mechanism Concept](https://ibb.co/qYHCw4ks)
+
 **The Penitent Mechanism** is an ancient Buddhist/Shinto shrine guardian statue possessed and corrupted by Dwemer machinery. This VRChat avatar embodies:
 
 - **Elder Scrolls Horror**: Dwemer machinery animating sacred statuary, oxidized bronze construction, ancient mechanisms corrupting holy relics
